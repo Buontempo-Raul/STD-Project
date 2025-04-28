@@ -13,14 +13,14 @@ services:
       # Set to 'true' to use mock data, 'false' to use real Azure services
       - USE_MOCK_DATA=false
       # Azure credentials (required when USE_MOCK_DATA=false)
-      - AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=stdstorage;AccountKey=/yPQ8eIvAFEdHcDMHFapgxf9CSLHUcpHMauFe3r6q+1wMCCkh8XOPxAhBifSEJjbHObeWcStf563+AStZnfnSA==;EndpointSuffix=core.windows.net
-      - STORAGE_CONTAINER=face-images
-      - FACE_API_KEY=AmxuyunYlzflJk85Pllr7fcYWtmcnJl1wl3DkyaCS7JOLlD5jcAEJQQJ99BDACGhslBXJ3w3AAAKACOG5xia
-      - FACE_API_ENDPOINT=https://std-face-detection.cognitiveservices.azure.com/
-      - SQL_USER=sqladmin
-      - SQL_PASSWORD=5623288538953232Ra.
-      - SQL_SERVER=std-sql-server.database.windows.net
-      - SQL_DB=face-detection-database
+      - AZURE_STORAGE_CONNECTION_STRING=
+      - STORAGE_CONTAINER=
+      - FACE_API_KEY=
+      - FACE_API_ENDPOINT=
+      - SQL_USER=
+      - SQL_PASSWORD=
+      - SQL_SERVER=
+      - SQL_DB=
     ports:
       - "89:89"
     volumes:
