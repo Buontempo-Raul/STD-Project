@@ -1,0 +1,237 @@
+/* src/App.css */
+.ai-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+  }
+  
+  h2 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+  }
+  
+  h3 {
+    color: #444;
+    margin-top: 25px;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #ddd;
+  }
+  
+  /* Upload section */
+  .upload-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .file-input-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+  }
+  
+  /* Hide the default file input */
+  input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  
+  .file-input-label {
+    padding: 10px 15px;
+    background-color: #4285f4;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .file-input-label:hover {
+    background-color: #3367d6;
+  }
+  
+  .file-name {
+    margin-left: 15px;
+    font-size: 14px;
+    color: #666;
+  }
+  
+  .image-preview-container {
+    margin: 15px 0;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .image-preview {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .upload-button {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background-color: #34a853;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+  
+  .upload-button:hover {
+    background-color: #2e8b47;
+  }
+  
+  .upload-button:disabled {
+    background-color: #a0c7a9;
+    cursor: not-allowed;
+  }
+  
+  .error-message {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #ffebee;
+    color: #d32f2f;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  
+  /* Detection result section */
+  .detection-result {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .result-image-container {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 15px;
+  }
+  
+  .result-image {
+    max-width: 100%;
+    max-height: 400px;
+    border-radius: 4px;
+  }
+  
+  .face-rectangle {
+    position: absolute;
+    border: 2px solid #4285f4;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  
+  .detection-details {
+    background-color: white;
+    padding: 15px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .face-details {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+  }
+  
+  .face-details p {
+    margin: 5px 0;
+  }
+  
+  /* History section */
+  .history-section {
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .history-item {
+    background-color: white;
+    padding: 15px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  .history-item-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  
+  .history-item-name {
+    font-weight: bold;
+    word-break: break-all;
+  }
+  
+  .history-item-time {
+    color: #666;
+    font-size: 14px;
+  }
+  
+  .history-item-detail {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .history-item-detail p {
+    margin: 0;
+  }
+  
+  .view-link {
+    color: #4285f4;
+    text-decoration: none;
+  }
+  
+  .view-link:hover {
+    text-decoration: underline;
+  }
+  
+  /* Responsive design */
+  @media (max-width: 600px) {
+    .ai-container {
+      padding: 10px;
+    }
+    
+    .file-input-container {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .file-name {
+      margin-left: 0;
+      margin-top: 10px;
+    }
+    
+    .history-item-header {
+      flex-direction: column;
+    }
+    
+    .history-item-time {
+      margin-top: 5px;
+    }
+  }
