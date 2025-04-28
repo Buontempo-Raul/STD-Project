@@ -288,9 +288,9 @@ async function saveMetadataToSql(metadata) {
     console.log('Table FaceDetections exists or was created');
     
     // Mock data for testing without Azure SQL
-    const useMockData = process.env.USE_MOCK_DATA === 'true';
+    const useMockData = 'false';
     
-    if (useMockData) {
+    if (useMockData == 'true') {
       console.log('Using mock data storage instead of SQL (for testing)');
       if (!global.mockDetections) {
         global.mockDetections = [];
@@ -326,9 +326,9 @@ async function saveMetadataToSql(metadata) {
 async function getDetectionsFromSql() {
   try {
     // Mock data for testing without Azure SQL
-    const useMockData = process.env.USE_MOCK_DATA === 'true';
+    const useMockData = 'false';
     
-    if (useMockData) {
+    if (useMockData == 'true') {
       console.log('Using mock data instead of SQL (for testing)');
       if (!global.mockDetections) {
         global.mockDetections = [];
