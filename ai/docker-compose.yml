@@ -13,7 +13,7 @@ services:
       # Set to 'true' to use mock data, 'false' to use real Azure services
       - USE_MOCK_DATA=false
       # Azure credentials (required when USE_MOCK_DATA=false)
-      - AZURE_STORAGE_CONNECTION_STRING=
+      - AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=stdstorage;AccountKey=YOUR_KEY_HERE;EndpointSuffix=core.windows.net
       - STORAGE_CONTAINER=
       - FACE_API_KEY=
       - FACE_API_ENDPOINT=
