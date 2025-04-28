@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # Baza de date MongoDB
+  mongodb:
+    image: mongo:4.4
+    container_name: mongodb
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Chat (Node.js)
+  chat-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chat-backend
+    environment:
+      - PORT=88
+      - MONGODB_URI=mongodb://root:example@mongodb:27017/chat?authSource=admin
+    ports:
+      - "88:88"
+    networks:
+      - chat-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    # Eliminam healthcheck care cauzează probleme
+
+  # Frontend Chat (React)
+  chat-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chat-frontend
+    ports:
+      - "90:90"
+    networks:
+      - chat-network
+    depends_on:
+      - chat-backend
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
