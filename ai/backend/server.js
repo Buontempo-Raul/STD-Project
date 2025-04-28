@@ -167,6 +167,7 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
   }
 });
 
+
 // Endpoint pentru preluarea istoricului detecțiilor
 app.get('/api/detections', async (req, res) => {
   console.log('API call received: /api/detections');
