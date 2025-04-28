@@ -8,29 +8,15 @@ services:
       dockerfile: Dockerfile
     container_name: ai-backend
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - PORT=89
-      # Set to 'true' to use mock data, 'false' to use real Azure services
-      - USE_MOCK_DATA=false
-      # Azure credentials (required when USE_MOCK_DATA=false)
-      - AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=stdstorage;AccountKey=YOUR_KEY_HERE;EndpointSuffix=core.windows.net
-      - STORAGE_CONTAINER=
-      - FACE_API_KEY=
-      - FACE_API_ENDPOINT=
-      - SQL_USER=
-      - SQL_PASSWORD=
-      - SQL_SERVER=
-      - SQL_DB=
+      - USE_MOCK_DATA=true
     ports:
       - "89:89"
     volumes:
       - ./backend/temp:/app/temp
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:89/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
     networks:
       - ai-network
 
@@ -42,7 +28,6 @@ services:
     container_name: ai-frontend
     restart: unless-stopped
     environment:
-      # Specify the backend API URL
       - REACT_APP_API_URL=http://localhost:89
     ports:
       - "91:91"
