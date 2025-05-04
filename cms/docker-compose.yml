@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  statamic:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost:5000/statamic:latest
+    ports:
+      - "8080:80"
+    volumes:
+      - statamic_storage:/var/www/html/storage
+      - statamic_content:/var/www/html/content
+    environment:
+      - APP_ENV=local
+      - APP_KEY=base64:OhnkcxLhoN5uBZ2QjikXVT3pM/YC5kpyWl65hyCeNr8=
+      - APP_DEBUG=true
+      - APP_URL=http://localhost
+      - DB_CONNECTION=sqlite
+
+volumes:
+  statamic_storage:
+  statamic_content:
