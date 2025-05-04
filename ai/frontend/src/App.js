@@ -109,29 +109,35 @@ function App() {
   // Handle image load to get actual dimensions
   const handleImageLoad = (e) => {
     const img = e.target;
-    console.log("Image loaded with dimensions:", img.naturalWidth, "x", img.naturalHeight);
-    console.log("Displayed dimensions:", img.width, "x", img.height);
+    
+    // Store the actual displayed dimensions
+    const rect = img.getBoundingClientRect();
+    
+    console.log("Image natural dimensions:", img.naturalWidth, "x", img.naturalHeight);
+    console.log("Image displayed dimensions:", rect.width, "x", rect.height);
     
     setImageSize({
-      width: img.naturalWidth,
-      height: img.naturalHeight,
-      displayWidth: img.width,
-      displayHeight: img.height
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+      displayWidth: rect.width,
+      displayHeight: rect.height
     });
   };
 
   // Calculate scaled position for face rectangle
   const getScaledRect = (rect) => {
-    if (!rect || !imageSize.width) return rect;
-
-    // Get the scale factor between natural image size and displayed size
-    const scale = imageRef.current ? imageRef.current.width / imageSize.width : 1;
+    if (!rect || !imageSize.naturalWidth || !imageSize.displayWidth) return null;
     
+    // Calculate the scale ratio between the natural image and how it's displayed
+    const scaleX = imageSize.displayWidth / imageSize.naturalWidth;
+    const scaleY = imageSize.displayHeight / imageSize.naturalHeight;
+    
+    // Apply the scaling directly to the face rectangle coordinates
     return {
-      left: Math.round(rect.left * scale),
-      top: Math.round(rect.top * scale),
-      width: Math.round(rect.width * scale),
-      height: Math.round(rect.height * scale)
+      left: Math.round(rect.left * scaleX),
+      top: Math.round(rect.top * scaleY),
+      width: Math.round(rect.width * scaleX),
+      height: Math.round(rect.height * scaleY)
     };
   };
 
@@ -143,53 +149,54 @@ function App() {
   // Render detection result with faces highlighted
   const renderDetectionResult = () => {
     if (!detectionResult) return null;
-    
-    return (
-      <div className="detection-result">
-        <h3>Detection Results</h3>
-        <div className="result-image-container">
-          <img 
-            ref={imageRef}
-            src={preview} 
-            alt="Detection result" 
-            className="result-image" 
-            onLoad={handleImageLoad}
-          />
-          {detectionResult.faces && detectionResult.faces.map((face, index) => {
-            // Get the original face rectangle
-            const rect = face.faceRectangle || { left: 0, top: 0, width: 0, height: 0 };
-            
-            // Apply scaling if needed
-            const scaledRect = getScaledRect(rect);
-            
-            console.log(`Face #${index + 1} original:`, rect);
-            console.log(`Face #${index + 1} scaled:`, scaledRect);
-            
-            return (
-              <div 
-                key={index}
-                className="face-rectangle"
-                style={{
-                  left: `${scaledRect.left}px`,
-                  top: `${scaledRect.top}px`,
-                  width: `${scaledRect.width}px`,
-                  height: `${scaledRect.height}px`,
-                  border: '4px solid red',  // Make it more visible
-                  position: 'absolute',
-                  boxSizing: 'border-box',
-                  pointerEvents: 'none'
-                }}
-              />
-            );
-          })}
-        </div>
+  
+  return (
+    <div className="detection-result">
+      <h3>Detection Results</h3>
+      <div className="result-image-container">
+        <img 
+          ref={imageRef}
+          src={preview} 
+          alt="Detection result" 
+          className="result-image" 
+          onLoad={handleImageLoad}
+        />
+        {detectionResult.faces && imageSize.displayWidth > 0 && detectionResult.faces.map((face, index) => {
+          // Extract face rectangle from the result
+          const rect = face.faceRectangle || { left: 0, top: 0, width: 0, height: 0 };
+          
+          // Calculate the scaled rectangle
+          const scaledRect = getScaledRect(rect);
+          
+          // If scaling failed, don't render this rectangle
+          if (!scaledRect) return null;
+          
+          console.log(`Face #${index + 1}:`);
+          console.log(`  Original: left=${rect.left}, top=${rect.top}, width=${rect.width}, height=${rect.height}`);
+          console.log(`  Scaled: left=${scaledRect.left}, top=${scaledRect.top}, width=${scaledRect.width}, height=${scaledRect.height}`);
+          
+          return (
+            <div 
+              key={index}
+              className="face-rectangle"
+              style={{
+                left: `${scaledRect.left}px`,
+                top: `${scaledRect.top}px`,
+                width: `${scaledRect.width}px`,
+                height: `${scaledRect.height}px`,
+                border: '3px solid red',
+                position: 'absolute',
+                boxSizing: 'border-box'
+              }}
+            />
+          );
+        })}
+      </div>
         <div className="detection-details">
           <p><strong>Detected faces:</strong> {detectionResult.faces ? detectionResult.faces.length : 0}</p>
           {detectionResult.faces && detectionResult.faces.map((face, index) => (
             <div key={index} className="face-details">
               <p><strong>Face #{index + 1}</strong></p>
-              <p>Age: {face.faceAttributes?.age || 'Unknown'}</p>
-              <p>Gender: {face.faceAttributes?.gender || 'Unknown'}</p>
               <p>Emotion: {
                 face.faceAttributes?.emotion ? 
                 Object.entries(face.faceAttributes.emotion)
