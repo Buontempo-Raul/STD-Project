@@ -9,11 +9,10 @@ services:
     container_name: ai-backend
     image: localhost:5000/ai-backend:latest
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       - PORT=89
       - USE_MOCK_DATA=false
+      # Credentials will be provided via Kubernetes secrets
     ports:
       - "89:89"
     volumes:
@@ -45,8 +44,9 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=example
+      # Credentials will be provided via Kubernetes secrets
+      - MONGO_INITDB_ROOT_USERNAME=placeholder
+      - MONGO_INITDB_ROOT_PASSWORD=placeholder
     networks:
       - app-network
     healthcheck:
@@ -64,7 +64,7 @@ services:
     image: localhost:5000/chat-backend:latest
     environment:
       - PORT=88
-      - MONGODB_URI=mongodb://root:example@mongodb:27017/chat?authSource=admin
+      - MONGODB_URI=mongodb://$(MONGODB_USERNAME):$(MONGODB_PASSWORD)@mongodb:27017/chat?authSource=admin
     ports:
       - "88:88"
     networks:
@@ -72,7 +72,6 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
-    # Eliminam healthcheck care cauzează probleme
 
   # Frontend Chat (React)
   chat-frontend:
@@ -102,7 +101,7 @@ services:
       - statamic_resources:/var/www/html/resources
     environment:
       - APP_ENV=local
-      - APP_KEY=base64:OhnkcxLhoN5uBZ2QjikXVT3pM/YC5kpyWl65hyCeNr8=
+      - APP_KEY=placeholder
       - APP_DEBUG=true
       - APP_URL=http://localhost
       - DB_CONNECTION=sqlite
