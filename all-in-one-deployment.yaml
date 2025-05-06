@@ -177,7 +177,7 @@ spec:
     spec:
       containers:
         - name: chat-backend
-          image: localhost:5000/chat-backend:latest
+          image: raulbuontempo/chat-backend:latest
           ports:
             - containerPort: 88
           env:
@@ -234,7 +234,7 @@ spec:
     spec:
       containers:
         - name: chat-frontend
-          image: localhost:5000/chat-frontend:latest
+          image: raulbuontempo/chat-frontend:latest
           ports:
             - containerPort: 90
 ---
@@ -273,7 +273,7 @@ spec:
     spec:
       containers:
         - name: ai-backend
-          image: localhost:5000/ai-backend:latest
+          image: raulbuontempo/ai-backend:latest
           ports:
             - containerPort: 89
           env:
@@ -372,7 +372,7 @@ spec:
     spec:
       containers:
         - name: ai-frontend
-          image: localhost:5000/ai-frontend:latest
+          image: raulbuontempo/ai-frontend:latest
           ports:
             - containerPort: 91
           env:
@@ -414,7 +414,7 @@ spec:
     spec:
       containers:
         - name: statamic
-          image: localhost:5000/statamic:latest
+          image: raulbuontempo/statamic:latest
           ports:
             - containerPort: 80
           env:
