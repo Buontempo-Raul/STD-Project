@@ -82,6 +82,20 @@ spec:
     requests:
       storage: 100Mi
 ---
+# Statamic Database PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: statamic-database
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: microk8s-hostpath
+---
 # MongoDB Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -387,68 +401,157 @@ kind: Deployment
 metadata:
   name: statamic
   namespace: default
-  labels:
-    app: statamic
 spec:
-  replicas: 2  # As specified in the requirements
+  replicas: 2
   selector:
     matchLabels:
       app: statamic
-  strategy:
-    type: Recreate
   template:
     metadata:
       labels:
         app: statamic
     spec:
-      containers:
-        - name: statamic
-          image: raulbuontempo/statamic:latest
-          ports:
-            - containerPort: 80
-          env:
-            - name: APP_ENV
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: APP_ENV
-            - name: APP_DEBUG
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: APP_DEBUG
-            - name: APP_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: APP_URL
-            - name: DB_CONNECTION
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: DB_CONNECTION
-            - name: APP_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: statamic-credentials
-                  key: app-key
-          volumeMounts:
-            - mountPath: /var/www/html/storage
-              name: statamic-storage
-            - mountPath: /var/www/html/content
-              name: statamic-content
-            - mountPath: /var/www/html/resources
-              name: statamic-resources
-      volumes:
+      # First, use an init container to properly set up directories
+      initContainers:
+      - name: init-directories
+        image: localhost:5000/statamic:latest
+        command: ['sh', '-c']
+        args:
+        - |
+          # Create required cache directories
+          mkdir -p /var/www/html/bootstrap/cache
+          mkdir -p /var/www/html/storage/framework/views
+          mkdir -p /var/www/html/storage/framework/cache
+          mkdir -p /var/www/html/storage/framework/sessions
+          mkdir -p /var/www/html/storage/app/public
+          mkdir -p /var/www/html/database
+          
+          # Create SQLite database
+          touch /var/www/html/database/database.sqlite
+          
+          # Create a simple .env file with required settings
+          cat > /var/www/html/.env << EOF
+          APP_NAME=Statamic
+          APP_ENV=production
+          APP_KEY=$(cat /run/secrets/statamic-app-key)
+          APP_DEBUG=false
+          APP_URL=http://localhost
+          
+          DB_CONNECTION=sqlite
+          DB_DATABASE=/var/www/html/database/database.sqlite
+          
+          CACHE_DRIVER=file
+          SESSION_DRIVER=file
+          QUEUE_DRIVER=sync
+          EOF
+          
+          # Set proper permissions
+          chmod -R 777 /var/www/html/bootstrap/cache
+          chmod -R 777 /var/www/html/storage
+          chmod -R 777 /var/www/html/database
+        volumeMounts:
         - name: statamic-storage
-          persistentVolumeClaim:
-            claimName: statamic-storage
+          mountPath: /var/www/html/storage
+        - name: bootstrap-cache
+          mountPath: /var/www/html/bootstrap/cache
+        - name: statamic-database
+          mountPath: /var/www/html/database
+      
+      # Then set up Statamic and copy templates
+      - name: setup-statamic
+        image: localhost:5000/statamic:latest
+        command: ['sh', '-c']
+        args:
+        - |
+          # Create resources directory structure
+          mkdir -p /var/www/html/resources/views/errors
+          
+          # Copy templates
+          cp /templates/layout.antlers.html /var/www/html/resources/views/
+          cp /templates/home.antlers.html /var/www/html/resources/views/
+          cp /templates/default.antlers.html /var/www/html/resources/views/
+          cp /templates/errors/404.antlers.html /var/www/html/resources/views/errors/
+          
+          # Initialize Statamic
+          cd /var/www/html
+          php artisan storage:link
+          php artisan statamic:install --no-interaction
+          
+          # Create default content
+          mkdir -p /var/www/html/content/collections/pages
+          
+          # Create default home page
+          echo -e "---\ntitle: Home\nid: home\ntemplate: home\n---\n# Welcome to Our Platform" > /var/www/html/content/collections/pages/home.md
+          
+          # Clear caches
+          php artisan config:clear
+          php artisan cache:clear
+          
+          # Set permissions again to be safe
+          chmod -R 777 /var/www/html/bootstrap/cache
+          chmod -R 777 /var/www/html/storage
+          chmod -R 777 /var/www/html/content
+          chmod -R 777 /var/www/html/resources
+        volumeMounts:
+        - name: statamic-storage
+          mountPath: /var/www/html/storage
         - name: statamic-content
-          persistentVolumeClaim:
-            claimName: statamic-content
+          mountPath: /var/www/html/content
         - name: statamic-resources
-          persistentVolumeClaim:
-            claimName: statamic-resources
+          mountPath: /var/www/html/resources
+        - name: bootstrap-cache
+          mountPath: /var/www/html/bootstrap/cache
+        - name: statamic-database
+          mountPath: /var/www/html/database
+        - name: templates-volume
+          mountPath: /templates
+      
+      # Main container
+      containers:
+      - name: statamic
+        image: localhost:5000/statamic:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: APP_ENV
+          value: "production"
+        - name: APP_DEBUG
+          value: "false"
+        - name: APP_URL
+          value: "http://localhost"
+        - name: DB_CONNECTION
+          value: "sqlite"
+        volumeMounts:
+        - name: statamic-storage
+          mountPath: /var/www/html/storage
+        - name: statamic-content
+          mountPath: /var/www/html/content
+        - name: statamic-resources
+          mountPath: /var/www/html/resources
+        - name: bootstrap-cache
+          mountPath: /var/www/html/bootstrap/cache
+        - name: statamic-database
+          mountPath: /var/www/html/database
+      
+      volumes:
+      - name: statamic-storage
+        persistentVolumeClaim:
+          claimName: statamic-storage
+      - name: statamic-content
+        persistentVolumeClaim:
+          claimName: statamic-content
+      - name: statamic-resources
+        persistentVolumeClaim:
+          claimName: statamic-resources
+      - name: bootstrap-cache
+        emptyDir: {}  # Use an emptyDir for cache - doesn't need to persist
+      - name: statamic-database
+        persistentVolumeClaim:
+          claimName: statamic-database  # Add this PVC if not already defined
+      - name: templates-volume
+        hostPath:
+          path: /home/student/statamic-templates
+          type: Directory
 ---
 # Statamic Service
 apiVersion: v1
