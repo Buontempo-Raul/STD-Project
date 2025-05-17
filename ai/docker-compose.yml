@@ -8,8 +8,6 @@ services:
       dockerfile: Dockerfile
     container_name: ai-backend
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
       - PORT=89
       - USE_MOCK_DATA=false
