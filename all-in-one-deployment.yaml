@@ -1,3 +1,4 @@
+---
 # ConfigMap for non-sensitive app configuration
 apiVersion: v1
 kind: ConfigMap
@@ -5,25 +6,16 @@ metadata:
   name: app-config
   namespace: default
 data:
-  # AI Backend Configuration
   AI_BACKEND_PORT: "89"
   AI_USE_MOCK_DATA: "false"
-  
-  # Chat Backend Configuration
   CHAT_BACKEND_PORT: "88"
-  
-  # Frontend URLs
   CHAT_FRONTEND_PORT: "90"
   AI_FRONTEND_PORT: "91"
-  APP_URL: "http://localhost"
-  
-  # CMS Configuration
+  APP_URL: "http://localhost"  # Change to your domain/IP if needed
   APP_ENV: "production"
   APP_DEBUG: "false"
   DB_CONNECTION: "sqlite"
-  
-  # Storage Container Settings
-  STORAGE_CONTAINER: "face-detection"
+  STORAGE_CONTAINER: "face-images"  # Made consistent with secret value
 ---
 # MongoDB PVC
 apiVersion: v1
@@ -165,7 +157,7 @@ metadata:
   labels:
     app: chat-backend
 spec:
-  replicas: 5  # According to requirements, chat backend needs 5 replicas
+  replicas: 5  # As specified in the requirements
   selector:
     matchLabels:
       app: chat-backend
@@ -186,7 +178,6 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: CHAT_BACKEND_PORT
-            # Set MongoDB connection string with credentials from secret
             - name: MONGODB_URI
               value: mongodb://$(MONGODB_USERNAME):$(MONGODB_PASSWORD)@mongodb:27017/chat?authSource=admin
             - name: MONGODB_USERNAME
@@ -222,7 +213,7 @@ metadata:
   labels:
     app: chat-frontend
 spec:
-  replicas: 1  # According to requirements, chat frontend needs 1 replica
+  replicas: 1  # As specified in the requirements
   selector:
     matchLabels:
       app: chat-frontend
@@ -245,6 +236,7 @@ metadata:
   name: chat-frontend
   namespace: default
 spec:
+  type: LoadBalancer
   ports:
     - port: 90
       targetPort: 90
@@ -260,7 +252,7 @@ metadata:
   labels:
     app: ai-backend
 spec:
-  replicas: 1
+  replicas: 1  # As specified in the requirements
   selector:
     matchLabels:
       app: ai-backend
@@ -277,7 +269,6 @@ spec:
           ports:
             - containerPort: 89
           env:
-            # ConfigMap values
             - name: PORT
               valueFrom:
                 configMapKeyRef:
@@ -290,11 +281,9 @@ spec:
                   key: AI_USE_MOCK_DATA
             - name: STORAGE_CONTAINER
               valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: STORAGE_CONTAINER
-            
-            # Secret values
+                secretKeyRef:
+                  name: azure-secrets
+                  key: storage_container  # Using the key from secret
             - name: AZURE_STORAGE_CONNECTION_STRING
               valueFrom:
                 secretKeyRef:
@@ -332,9 +321,9 @@ spec:
                   key: sql-db
           volumeMounts:
             - mountPath: /app/temp
-              name: ai-backend-temp
+              name: ai-backend-claim0
       volumes:
-        - name: ai-backend-temp
+        - name: ai-backend-claim0
           persistentVolumeClaim:
             claimName: ai-backend-claim0
 ---
@@ -360,7 +349,7 @@ metadata:
   labels:
     app: ai-frontend
 spec:
-  replicas: 1  # According to requirements, AI frontend needs 1 replica
+  replicas: 1  # As specified in the requirements
   selector:
     matchLabels:
       app: ai-frontend
@@ -401,7 +390,7 @@ metadata:
   labels:
     app: statamic
 spec:
-  replicas: 2  # According to requirements, statamic needs 2 replicas
+  replicas: 2  # As specified in the requirements
   selector:
     matchLabels:
       app: statamic
@@ -468,6 +457,7 @@ metadata:
   name: statamic
   namespace: default
 spec:
+  type: LoadBalancer
   ports:
     - port: 80
       targetPort: 80
@@ -481,40 +471,43 @@ metadata:
   name: web-ingress
   namespace: default
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"  # Increase max upload size for AI component
 spec:
   rules:
   - http:
       paths:
-      - path: /
+      - path: /(.*)
         pathType: Prefix
         backend:
           service:
             name: statamic
             port:
               number: 80
-      - path: /chat
+      - path: /chat(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: chat-frontend
             port:
               number: 90
-      - path: /ws
+      - path: /ws(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: chat-backend
             port:
               number: 88
-      - path: /ai
+      - path: /ai(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: ai-frontend
             port:
               number: 91
-      - path: /api
+      - path: /api(/|$)(.*)
         pathType: Prefix
         backend:
           service:
