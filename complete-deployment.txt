@@ -1,91 +1,5 @@
 ---
-# StorageClass for Azure Disk
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: azure-disk
-provisioner: kubernetes.io/azure-disk
-parameters:
-  storageaccounttype: Standard_LRS
-  kind: Managed
----
-# MySQL PVC
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mysql-data
-  namespace: default
-spec:
-  storageClassName: azure-disk
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 100Mi
----
-# MySQL Deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mysql
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: mysql
-  template:
-    metadata:
-      labels:
-        app: mysql
-    spec:
-      containers:
-      - name: mysql
-        image: mysql:8.0
-        ports:
-        - containerPort: 3306
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secrets
-              key: root-password
-        - name: MYSQL_DATABASE
-          value: statamic
-        - name: MYSQL_USER
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secrets
-              key: username
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secrets
-              key: password
-        volumeMounts:
-        - name: mysql-data
-          mountPath: /var/lib/mysql
-      volumes:
-      - name: mysql-data
-        persistentVolumeClaim:
-          claimName: mysql-data
-      imagePullSecrets:
-      - name: acr-secret
----
-# MySQL Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql-service
-  namespace: default
-spec:
-  ports:
-  - port: 3306
-    targetPort: 3306
-  selector:
-    app: mysql
----
-# ConfigMap for non-sensitive app configuration
+# ConfigMap for application configuration
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -96,85 +10,108 @@ data:
   AI_USE_MOCK_DATA: "false"
   CHAT_BACKEND_PORT: "88"
   CHAT_FRONTEND_PORT: "90"
-  AI_FRONTEND_PORT: "91"  # Corrected key and value
-  APP_URL: "http://localhost"  # Change to your domain/IP if needed
+  AI_FRONTEND_PORT: "91"
+  APP_URL: "http://4.213.180.54" # Replace with your actual public IP
   APP_ENV: "production"
-  APP_DEBUG: "false"
-  DB_CONNECTION: "mysql"
-  DB_HOST: "mysql-service"
-  DB_PORT: "3306"
-  DB_DATABASE: "statamic"
+  APP_DEBUG: "true" # Changed to true for debugging
+  DB_CONNECTION: "sqlite"
   STORAGE_CONTAINER: "face-images"
 ---
-# MongoDB PVC
+# MongoDB Persistent Volume Claim
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: mongodb-data
   namespace: default
 spec:
-  storageClassName: azure-disk
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 100Mi
+      storage: 1Gi
+  storageClassName: microk8s-hostpath
 ---
-# AI Backend PVC
+# AI Backend Persistent Volume Claim
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ai-backend-claim0
+  name: ai-backend-temp
   namespace: default
 spec:
-  storageClassName: azure-disk
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 100Mi
+      storage: 1Gi
+  storageClassName: microk8s-hostpath
 ---
-# Statamic Storage PVC
+# Statamic Storage Persistent Volume Claims
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: statamic-storage
   namespace: default
 spec:
-  storageClassName: azure-disk
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 100Mi
+      storage: 1Gi
+  storageClassName: microk8s-hostpath
 ---
-# Statamic Content PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: statamic-content
   namespace: default
 spec:
-  storageClassName: azure-disk
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 100Mi
+      storage: 1Gi
+  storageClassName: microk8s-hostpath
 ---
-# Statamic Resources PVC
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: statamic-resources
   namespace: default
 spec:
-  storageClassName: azure-disk
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: microk8s-hostpath
+---
+# Statamic Bootstrap Cache PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: statamic-bootstrap-cache
+  namespace: default
+spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 100Mi
+  storageClassName: microk8s-hostpath
+---
+# Statamic Database PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: statamic-database
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: microk8s-hostpath
 ---
 # MongoDB Deployment
 apiVersion: apps/v1
@@ -182,8 +119,6 @@ kind: Deployment
 metadata:
   name: mongodb
   namespace: default
-  labels:
-    app: mongodb
 spec:
   replicas: 1
   selector:
@@ -197,39 +132,35 @@ spec:
         app: mongodb
     spec:
       containers:
-        - name: mongodb
-          image: mongo:4.4
-          ports:
-            - containerPort: 27017
-          env:
-            - name: MONGO_INITDB_ROOT_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: mongodb-credentials
-                  key: mongodb-root-username
-            - name: MONGO_INITDB_ROOT_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mongodb-credentials
-                  key: mongodb-root-password
-          livenessProbe:
-            exec:
-              command:
-                - mongo
-                - --eval
-                - db.adminCommand('ping')
-            failureThreshold: 5
-            periodSeconds: 10
-            timeoutSeconds: 5
-          volumeMounts:
-            - mountPath: /data/db
-              name: mongodb-data
-      volumes:
+      - name: mongodb
+        image: mongo:4.4
+        ports:
+        - containerPort: 27017
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-credentials
+              key: mongodb-root-username
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-credentials
+              key: mongodb-root-password
+        volumeMounts:
         - name: mongodb-data
-          persistentVolumeClaim:
-            claimName: mongodb-data
-      imagePullSecrets:
-      - name: acr-secret
+          mountPath: /data/db
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+      volumes:
+      - name: mongodb-data
+        persistentVolumeClaim:
+          claimName: mongodb-data
 ---
 # MongoDB Service
 apiVersion: v1
@@ -238,11 +169,12 @@ metadata:
   name: mongodb
   namespace: default
 spec:
-  ports:
-    - port: 27017
-      targetPort: 27017
   selector:
     app: mongodb
+  ports:
+  - port: 27017
+    targetPort: 27017
+  type: ClusterIP
 ---
 # Chat Backend Deployment
 apiVersion: apps/v1
@@ -250,50 +182,43 @@ kind: Deployment
 metadata:
   name: chat-backend
   namespace: default
-  labels:
-    app: chat-backend
 spec:
-  replicas: 5  # As specified in the requirements
+  replicas: 5
   selector:
     matchLabels:
       app: chat-backend
-  strategy: {}
   template:
     metadata:
       labels:
         app: chat-backend
     spec:
       containers:
-        - name: chat-backend
-          image: raulbuontempo/chat-backend:latest  # Update to your ACR
-          ports:
-            - containerPort: 88
-          env:
-            - name: PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: CHAT_BACKEND_PORT
-            - name: MONGODB_URI
-              value: mongodb://$(MONGODB_USERNAME):$(MONGODB_PASSWORD)@mongodb:27017/chat?authSource=admin
-            - name: MONGODB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: mongodb-credentials
-                  key: mongodb-root-username
-            - name: MONGODB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mongodb-credentials
-                  key: mongodb-root-password
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 88
-            initialDelaySeconds: 5
-            periodSeconds: 10
-      imagePullSecrets:
-      - name: acr-secret
+      - name: chat-backend
+        image: raulbuontempo/chat-backend:latest
+        ports:
+        - containerPort: 88
+        env:
+        - name: PORT
+          value: "88"
+        - name: MONGODB_URI
+          value: "mongodb://$(MONGODB_USERNAME):$(MONGODB_PASSWORD)@mongodb:27017/chat?authSource=admin"
+        - name: MONGODB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-credentials
+              key: mongodb-root-username
+        - name: MONGODB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-credentials
+              key: mongodb-root-password
+        resources:
+          limits:
+            cpu: "300m"
+            memory: "256Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
 ---
 # Chat Backend Service
 apiVersion: v1
@@ -302,11 +227,12 @@ metadata:
   name: chat-backend
   namespace: default
 spec:
-  ports:
-    - port: 88
-      targetPort: 88
   selector:
     app: chat-backend
+  ports:
+  - port: 88
+    targetPort: 88
+  type: ClusterIP
 ---
 # Chat Frontend Deployment
 apiVersion: apps/v1
@@ -314,32 +240,28 @@ kind: Deployment
 metadata:
   name: chat-frontend
   namespace: default
-  labels:
-    app: chat-frontend
 spec:
-  replicas: 1  # As specified in the requirements
+  replicas: 1
   selector:
     matchLabels:
       app: chat-frontend
-  strategy: {}
   template:
     metadata:
       labels:
         app: chat-frontend
     spec:
       containers:
-        - name: chat-frontend
-          image: raulbuontempo/chat-frontend:latest  # Update to your ACR
-          ports:
-            - containerPort: 90
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 90
-            initialDelaySeconds: 10
-            periodSeconds: 10
-      imagePullSecrets:
-      - name: acr-secret
+      - name: chat-frontend
+        image: raulbuontempo/chat-frontend:latest
+        ports:
+        - containerPort: 90
+        resources:
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
 ---
 # Chat Frontend Service
 apiVersion: v1
@@ -348,12 +270,12 @@ metadata:
   name: chat-frontend
   namespace: default
 spec:
-  ports:
-    - port: 90
-      targetPort: 90
-      name: http
   selector:
     app: chat-frontend
+  ports:
+  - port: 90
+    targetPort: 90
+  type: ClusterIP
 ---
 # AI Backend Deployment
 apiVersion: apps/v1
@@ -361,91 +283,80 @@ kind: Deployment
 metadata:
   name: ai-backend
   namespace: default
-  labels:
-    app: ai-backend
 spec:
-  replicas: 1  # As specified in the requirements
+  replicas: 1
   selector:
     matchLabels:
       app: ai-backend
-  strategy:
-    type: Recreate
   template:
     metadata:
       labels:
         app: ai-backend
     spec:
       containers:
-        - name: ai-backend
-          image: raulbuontempo/ai-backend:latest  # Update to your ACR
-          ports:
-            - containerPort: 89
-          env:
-            - name: PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: AI_BACKEND_PORT
-            - name: USE_MOCK_DATA
-              valueFrom:
-                configMapKeyRef:
-                  name: app-config
-                  key: AI_USE_MOCK_DATA
-            - name: STORAGE_CONTAINER
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: storage_container
-            - name: AZURE_STORAGE_CONNECTION_STRING
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: storage-connection-string
-            - name: FACE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: face-api-key
-            - name: FACE_API_ENDPOINT
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: face-api-endpoint
-            - name: SQL_USER
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: sql-user
-            - name: SQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: sql-password
-            - name: SQL_SERVER
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: sql-server
-            - name: SQL_DB
-              valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: sql-db
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 89
-            initialDelaySeconds: 15
-            periodSeconds: 15
-          volumeMounts:
-            - mountPath: /app/temp
-              name: ai-backend-claim0
+      - name: ai-backend
+        image: raulbuontempo/ai-backend:latest
+        ports:
+        - containerPort: 89
+        env:
+        - name: PORT
+          value: "89"
+        - name: USE_MOCK_DATA
+          value: "false"
+        - name: STORAGE_CONTAINER
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: storage_container
+        - name: AZURE_STORAGE_CONNECTION_STRING
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: storage-connection-string
+        - name: FACE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: face-api-key
+        - name: FACE_API_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: face-api-endpoint
+        - name: SQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: sql-user
+        - name: SQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: sql-password
+        - name: SQL_SERVER
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: sql-server
+        - name: SQL_DB
+          valueFrom:
+            secretKeyRef:
+              name: azure-secrets
+              key: sql-db
+        volumeMounts:
+        - name: ai-backend-temp
+          mountPath: /app/temp
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
       volumes:
-        - name: ai-backend-claim0
-          persistentVolumeClaim:
-            claimName: ai-backend-claim0
-      imagePullSecrets:
-      - name: acr-secret
+      - name: ai-backend-temp
+        persistentVolumeClaim:
+          claimName: ai-backend-temp
 ---
 # AI Backend Service
 apiVersion: v1
@@ -454,12 +365,12 @@ metadata:
   name: ai-backend
   namespace: default
 spec:
-  ports:
-    - port: 89
-      targetPort: 89
-      name: http
   selector:
     app: ai-backend
+  ports:
+  - port: 89
+    targetPort: 89
+  type: ClusterIP
 ---
 # AI Frontend Deployment
 apiVersion: apps/v1
@@ -467,35 +378,31 @@ kind: Deployment
 metadata:
   name: ai-frontend
   namespace: default
-  labels:
-    app: ai-frontend
 spec:
-  replicas: 1  # As specified in the requirements
+  replicas: 1
   selector:
     matchLabels:
       app: ai-frontend
-  strategy: {}
   template:
     metadata:
       labels:
         app: ai-frontend
     spec:
       containers:
-        - name: ai-frontend
-          image: raulbuontempo/ai-frontend:latest  # Update to your ACR
-          ports:
-            - containerPort: 91
-          env:
-            - name: REACT_APP_API_URL
-              value: http://ai-backend:89
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 91
-            initialDelaySeconds: 10
-            periodSeconds: 10
-      imagePullSecrets:
-      - name: acr-secret
+      - name: ai-frontend
+        image: raulbuontempo/ai-frontend:latest
+        ports:
+        - containerPort: 91
+        env:
+        - name: REACT_APP_API_URL
+          value: "/api" # Use the relative path via ingress
+        resources:
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
 ---
 # AI Frontend Service
 apiVersion: v1
@@ -504,21 +411,42 @@ metadata:
   name: ai-frontend
   namespace: default
 spec:
-  ports:
-    - port: 91
-      targetPort: 91
-      name: http
   selector:
     app: ai-frontend
+  ports:
+  - port: 91
+    targetPort: 91
+  type: ClusterIP
 ---
-# Statamic Deployment with local template directory
+# Init ConfigMap with fix-permissions script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: statamic-init-scripts
+  namespace: default
+data:
+  fix-permissions.sh: |-
+    #!/bin/sh
+    set -e
+    echo "Creating Laravel/Statamic directory structure..."
+    mkdir -p /var/www/html/bootstrap/cache
+    mkdir -p /var/www/html/storage/framework/cache
+    mkdir -p /var/www/html/storage/framework/sessions
+    mkdir -p /var/www/html/storage/framework/views
+    mkdir -p /var/www/html/storage/app/public
+    
+    echo "Setting correct permissions..."
+    chmod -R 777 /var/www/html/bootstrap
+    chmod -R 777 /var/www/html/storage
+    
+    echo "Directory structure and permissions set!"
+---
+# Simplified Statamic Deployment with cache fix
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: statamic
   namespace: default
-  labels:
-    app: statamic
 spec:
   replicas: 2
   selector:
@@ -530,118 +458,20 @@ spec:
         app: statamic
     spec:
       initContainers:
-      - name: setup-templates
-        image: busybox
-        command: ["/bin/sh", "-c"]
-        args:
-        - |
-          echo "Setting up templates from local directory..."
-          mkdir -p /var/www/html/resources/views/errors
-          
-          # Check if template files exist in the image (already copied during build)
-          if [ -f "/var/www/html/resources/views/layout.antlers.html" ]; then
-            echo "layout.antlers.html already present"
-          else
-            echo "ERROR: layout.antlers.html not found!"
-            exit 1
-          fi
-          
-          if [ -f "/var/www/html/resources/views/home.antlers.html" ]; then
-            echo "home.antlers.html already present"
-          else
-            echo "ERROR: home.antlers.html not found!"
-            exit 1
-          fi
-          
-          if [ -f "/var/www/html/resources/views/default.antlers.html" ]; then
-            echo "default.antlers.html already present"
-          else
-            echo "ERROR: default.antlers.html not found!"
-            exit 1
-          fi
-          
-          if [ -f "/var/www/html/resources/views/errors/404.antlers.html" ]; then
-            echo "errors/404.antlers.html already present"
-          else
-            echo "ERROR: errors/404.antlers.html not found!"
-            exit 1
-          fi
-          
-          # List copied templates
-          echo "Templates in resources/views:"
-          ls -la /var/www/html/resources/views/
-          echo "Templates in resources/views/errors:"
-          ls -la /var/www/html/resources/views/errors/
-          
-          chmod -R 755 /var/www/html/resources
-          echo "Templates setup complete"
+      - name: fix-permissions
+        image: alpine:3.15
+        command: ["/bin/sh", "/scripts/fix-permissions.sh"]
         volumeMounts:
-        - name: statamic-resources
-          mountPath: /var/www/html/resources
+        - name: bootstrap-cache
+          mountPath: /var/www/html/bootstrap
+        - name: storage
+          mountPath: /var/www/html/storage
+        - name: scripts
+          mountPath: /scripts
       containers:
       - name: statamic
-        image: raulbuontempo/statamic:latest  # Update to your ACR
-        command: ["/bin/sh", "-c"]
-        args:
-        - |
-          # Create a proper Nginx configuration file
-          echo 'server {
-              listen 80;
-              server_name localhost;
-              root /var/www/html/public;
-              index index.php;
-              charset utf-8;
-              
-              location / {
-                  try_files $uri $uri/ /index.php?$query_string;
-              }
-              
-              location = /favicon.ico { access_log off; log_not_found off; }
-              location = /robots.txt  { access_log off; log_not_found off; }
-              
-              error_page 404 /index.php;
-              
-              location ~ \.php$ {
-                  fastcgi_pass 127.0.0.1:9000;
-                  fastcgi_index index.php;
-                  fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-                  include fastcgi_params;
-              }
-              
-              location ~ /\.(?!well-known).* {
-                  deny all;
-              }
-          }' > /etc/nginx/http.d/default.conf
-          
-          # Fix routes file to include proper Statamic routing
-          cat > /var/www/html/routes/web.php << 'EOF'
-          <?php
-          use Illuminate\Support\Facades\Route;
-          
-          // Add the default Statamic route handling
-          Route::statamic('/', 'home');
-          Route::statamic('/{slug}', 'default');
-          EOF
-          
-          # Set up minimal content (just a basic home page)
-          mkdir -p /var/www/html/content/collections/pages
-          echo -e "---\ntitle: Home\nid: home\ntemplate: home\n---\n# Welcome to Our Platform\n\nThis is a multi-component web application featuring a real-time chat and an AI-powered face detection system.\n\n<iframe src=\"/chat\" width=\"600\" height=\"400\"></iframe>\n\n<iframe src=\"/ai\" width=\"600\" height=\"400\"></iframe>" > /var/www/html/content/collections/pages/home.md
-          
-          # Fix permissions
-          chmod -R 755 /var/www/html/bootstrap/cache
-          chmod -R 755 /var/www/html/storage
-          chmod -R 755 /var/www/html/content
-          chmod -R 755 /var/www/html/resources
-          
-          # Clear caches
-          cd /var/www/html
-          php artisan cache:clear
-          php artisan config:clear
-          php artisan route:clear
-          php artisan view:clear
-          
-          # Start services with supervisord
-          exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+        image: raulbuontempo/statamic:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
         env:
@@ -649,127 +479,118 @@ spec:
           value: "production"
         - name: APP_DEBUG
           value: "true"
+        - name: APP_KEY
+          valueFrom:
+            secretKeyRef:
+              name: statamic-credentials
+              key: app-key
         - name: APP_URL
           value: "http://localhost"
         - name: DB_CONNECTION
-          value: "mysql"
-        - name: DB_HOST
-          value: "mysql-service"
-        - name: DB_PORT
-          value: "3306"
-        - name: DB_DATABASE
-          value: "statamic"
-        - name: DB_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secrets
-              key: username
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secrets
-              key: password
-        - name: APP_KEY
-          value: "base64:OhnkcxLhoN5uBZ2QjikXVT3pM/YC5kpyWl65hyCeNr8="
-        - name: CACHE_DRIVER
-          value: "file"
+          value: "sqlite"
         volumeMounts:
-        - name: statamic-storage
-          mountPath: /var/www/html/storage
-        - name: statamic-content
-          mountPath: /var/www/html/content
-        - name: statamic-resources
-          mountPath: /var/www/html/resources
         - name: bootstrap-cache
-          mountPath: /var/www/html/bootstrap/cache
-        readinessProbe:
-          tcpSocket:
-            port: 80
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 10
-        livenessProbe:
-          tcpSocket:
-            port: 80
-          initialDelaySeconds: 60
-          periodSeconds: 20
-          timeoutSeconds: 10
-          failureThreshold: 6
+          mountPath: /var/www/html/bootstrap
+        - name: storage
+          mountPath: /var/www/html/storage
+        - name: content
+          mountPath: /var/www/html/content
+        - name: resources
+          mountPath: /var/www/html/resources
+        resources:
+          limits:
+            cpu: "600m"
+            memory: "512Mi"
+          requests:
+            cpu: "300m"
+            memory: "256Mi"
       volumes:
-      - name: statamic-storage
-        persistentVolumeClaim:
-          claimName: statamic-storage
-      - name: statamic-content
-        persistentVolumeClaim:
-          claimName: statamic-content
-      - name: statamic-resources
-        persistentVolumeClaim:
-          claimName: statamic-resources
       - name: bootstrap-cache
         emptyDir: {}
-      imagePullSecrets:
-      - name: acr-secret
+      - name: storage
+        emptyDir: {}
+      - name: content
+        emptyDir: {}
+      - name: resources
+        emptyDir: {}
+      - name: scripts
+        configMap:
+          name: statamic-init-scripts
+          defaultMode: 0777
 ---
-# Statamic Service - Exposed as LoadBalancer for external access
+# Statamic Service
 apiVersion: v1
 kind: Service
 metadata:
   name: statamic
   namespace: default
 spec:
-  type: LoadBalancer
-  ports:
-    - port: 80
-      targetPort: 80
-      name: http
   selector:
     app: statamic
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
 ---
-# Nginx Ingress Controller for internal service routing
+# LoadBalancer Service to expose Statamic directly
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app
+  namespace: default
+spec:
+  selector:
+    app: statamic
+  ports:
+  - port: 80
+    targetPort: 80
+  type: LoadBalancer
+---
+# Simplified Ingress configuration without complex rewrites
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: web-ingress
   namespace: default
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"  # Increase max upload size for AI component
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
 spec:
+  ingressClassName: nginx
   rules:
   - http:
       paths:
-      - path: /(.*)
+      - path: /
         pathType: Prefix
         backend:
           service:
             name: statamic
             port:
               number: 80
-      - path: /chat(/|$)(.*)
+      - path: /chat
         pathType: Prefix
         backend:
           service:
             name: chat-frontend
             port:
               number: 90
-      - path: /ws(/|$)(.*)
+      - path: /ws
         pathType: Prefix
         backend:
           service:
             name: chat-backend
             port:
               number: 88
-      - path: /ai(/|$)(.*)
+      - path: /ai
         pathType: Prefix
         backend:
           service:
             name: ai-frontend
             port:
               number: 91
-      - path: /api(/|$)(.*)
+      - path: /api
         pathType: Prefix
         backend:
           service:
