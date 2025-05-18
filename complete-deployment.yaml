@@ -1,23 +1,4 @@
 ---
-# ConfigMap for Metallb
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
-metadata:
-  name: first-pool
-  namespace: metallb-system
-spec:
-  addresses:
-  - 192.168.1.240-192.168.1.250  # Replace with your VM's subnet range
----
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: l2-advert
-  namespace: metallb-system
-spec:
-  ipAddressPools:
-  - first-pool
----
 # ConfigMap for non-sensitive app configuration
 apiVersion: v1
 kind: ConfigMap
@@ -34,7 +15,7 @@ data:
   APP_ENV: "production"
   APP_DEBUG: "false"
   DB_CONNECTION: "sqlite"
-  STORAGE_CONTAINER: "face-images"  # Made consistent with secret value
+  STORAGE_CONTAINER: "face-images"
 ---
 # MongoDB PVC
 apiVersion: v1
@@ -109,11 +90,10 @@ metadata:
   namespace: default
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 100Mi
-  storageClassName: standard
 ---
 # MongoDB Deployment
 apiVersion: apps/v1
@@ -223,6 +203,12 @@ spec:
                 secretKeyRef:
                   name: mongodb-credentials
                   key: mongodb-root-password
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 88
+            initialDelaySeconds: 5
+            periodSeconds: 10
 ---
 # Chat Backend Service
 apiVersion: v1
@@ -261,6 +247,12 @@ spec:
           image: raulbuontempo/chat-frontend:latest
           ports:
             - containerPort: 90
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 90
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 # Chat Frontend Service
 apiVersion: v1
@@ -269,10 +261,10 @@ metadata:
   name: chat-frontend
   namespace: default
 spec:
-  type: LoadBalancer
   ports:
     - port: 90
       targetPort: 90
+      name: http
   selector:
     app: chat-frontend
 ---
@@ -316,7 +308,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: azure-secrets
-                  key: storage_container  # Using the key from secret
+                  key: storage_container
             - name: AZURE_STORAGE_CONNECTION_STRING
               valueFrom:
                 secretKeyRef:
@@ -352,6 +344,12 @@ spec:
                 secretKeyRef:
                   name: azure-secrets
                   key: sql-db
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 89
+            initialDelaySeconds: 15
+            periodSeconds: 15
           volumeMounts:
             - mountPath: /app/temp
               name: ai-backend-claim0
@@ -370,6 +368,7 @@ spec:
   ports:
     - port: 89
       targetPort: 89
+      name: http
   selector:
     app: ai-backend
 ---
@@ -400,6 +399,12 @@ spec:
           env:
             - name: REACT_APP_API_URL
               value: http://ai-backend:89
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 91
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 # AI Frontend Service
 apiVersion: v1
@@ -411,15 +416,18 @@ spec:
   ports:
     - port: 91
       targetPort: 91
+      name: http
   selector:
     app: ai-frontend
 ---
-# Statamic Deployment
+# Statamic Deployment with local template directory
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: statamic
   namespace: default
+  labels:
+    app: statamic
 spec:
   replicas: 2
   selector:
@@ -430,116 +438,136 @@ spec:
       labels:
         app: statamic
     spec:
-      # First, use an init container to properly set up directories
       initContainers:
-      - name: init-directories
-        image: localhost:5000/statamic:latest
-        command: ['sh', '-c']
+      - name: setup-templates
+        image: busybox
+        command: ["/bin/sh", "-c"]
         args:
         - |
-          # Create required cache directories
-          mkdir -p /var/www/html/bootstrap/cache
-          mkdir -p /var/www/html/storage/framework/views
-          mkdir -p /var/www/html/storage/framework/cache
-          mkdir -p /var/www/html/storage/framework/sessions
-          mkdir -p /var/www/html/storage/app/public
-          mkdir -p /var/www/html/database
-          
-          # Create SQLite database
-          touch /var/www/html/database/database.sqlite
-          
-          # Create a simple .env file with required settings
-          cat > /var/www/html/.env << EOF
-          APP_NAME=Statamic
-          APP_ENV=production
-          APP_KEY=$(cat /run/secrets/statamic-app-key)
-          APP_DEBUG=false
-          APP_URL=http://localhost
-          
-          DB_CONNECTION=sqlite
-          DB_DATABASE=/var/www/html/database/database.sqlite
-          
-          CACHE_DRIVER=file
-          SESSION_DRIVER=file
-          QUEUE_DRIVER=sync
-          EOF
-          
-          # Set proper permissions
-          chmod -R 777 /var/www/html/bootstrap/cache
-          chmod -R 777 /var/www/html/storage
-          chmod -R 777 /var/www/html/database
-        volumeMounts:
-        - name: statamic-storage
-          mountPath: /var/www/html/storage
-        - name: bootstrap-cache
-          mountPath: /var/www/html/bootstrap/cache
-        - name: statamic-database
-          mountPath: /var/www/html/database
-      
-      # Then set up Statamic and copy templates
-      - name: setup-statamic
-        image: localhost:5000/statamic:latest
-        command: ['sh', '-c']
-        args:
-        - |
-          # Create resources directory structure
+          echo "Setting up templates from local directory..."
           mkdir -p /var/www/html/resources/views/errors
           
-          # Copy templates
-          cp /templates/layout.antlers.html /var/www/html/resources/views/
-          cp /templates/home.antlers.html /var/www/html/resources/views/
-          cp /templates/default.antlers.html /var/www/html/resources/views/
-          cp /templates/errors/404.antlers.html /var/www/html/resources/views/errors/
+          # Check if template files exist in the mounted directory
+          if [ -f "/templates/layout.antlers.html" ]; then
+            cp /templates/layout.antlers.html /var/www/html/resources/views/
+            echo "Copied layout.antlers.html"
+          else
+            echo "WARNING: /templates/layout.antlers.html not found!"
+          fi
           
-          # Initialize Statamic
-          cd /var/www/html
-          php artisan storage:link
-          php artisan statamic:install --no-interaction
+          if [ -f "/templates/home.antlers.html" ]; then
+            cp /templates/home.antlers.html /var/www/html/resources/views/
+            echo "Copied home.antlers.html"
+          else
+            echo "WARNING: /templates/home.antlers.html not found!"
+          fi
           
-          # Create default content
+          if [ -f "/templates/default.antlers.html" ]; then
+            cp /templates/default.antlers.html /var/www/html/resources/views/
+            echo "Copied default.antlers.html"
+          else
+            echo "WARNING: /templates/default.antlers.html not found!"
+          fi
+          
+          if [ -f "/templates/errors/404.antlers.html" ]; then
+            cp /templates/errors/404.antlers.html /var/www/html/resources/views/errors/
+            echo "Copied errors/404.antlers.html"
+          else
+            echo "WARNING: /templates/errors/404.antlers.html not found!"
+          fi
+          
+          # List copied templates
+          echo "Templates in resources/views:"
+          ls -la /var/www/html/resources/views/
+          echo "Templates in resources/views/errors:"
+          ls -la /var/www/html/resources/views/errors/
+          
+          chmod -R 755 /var/www/html/resources
+          echo "Templates setup complete"
+        volumeMounts:
+        - name: statamic-resources
+          mountPath: /var/www/html/resources
+        - name: templates-volume
+          mountPath: /templates
+      containers:
+      - name: statamic
+        image: raulbuontempo/statamic:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # Create a proper Nginx configuration file
+          echo 'server {
+              listen 80;
+              server_name localhost;
+              root /var/www/html/public;
+              index index.php;
+              charset utf-8;
+              
+              location / {
+                  try_files $uri $uri/ /index.php?$query_string;
+              }
+              
+              location = /favicon.ico { access_log off; log_not_found off; }
+              location = /robots.txt  { access_log off; log_not_found off; }
+              
+              error_page 404 /index.php;
+              
+              location ~ \.php$ {
+                  fastcgi_pass 127.0.0.1:9000;
+                  fastcgi_index index.php;
+                  fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+                  include fastcgi_params;
+              }
+              
+              location ~ /\.(?!well-known).* {
+                  deny all;
+              }
+          }' > /etc/nginx/http.d/default.conf
+          
+          # Fix routes file to include proper Statamic routing
+          cat > /var/www/html/routes/web.php << 'EOF'
+          <?php
+          use Illuminate\Support\Facades\Route;
+          
+          // Add the default Statamic route handling
+          Route::statamic('/', 'home');
+          Route::statamic('/{slug}', 'default');
+          EOF
+          
+          # Set up minimal content (just a basic home page)
           mkdir -p /var/www/html/content/collections/pages
-          
-          # Create default home page
           echo -e "---\ntitle: Home\nid: home\ntemplate: home\n---\n# Welcome to Our Platform" > /var/www/html/content/collections/pages/home.md
           
-          # Clear caches
-          php artisan config:clear
-          php artisan cache:clear
-          
-          # Set permissions again to be safe
+          # Fix permissions
           chmod -R 777 /var/www/html/bootstrap/cache
           chmod -R 777 /var/www/html/storage
           chmod -R 777 /var/www/html/content
-          chmod -R 777 /var/www/html/resources
-        volumeMounts:
-        - name: statamic-storage
-          mountPath: /var/www/html/storage
-        - name: statamic-content
-          mountPath: /var/www/html/content
-        - name: statamic-resources
-          mountPath: /var/www/html/resources
-        - name: bootstrap-cache
-          mountPath: /var/www/html/bootstrap/cache
-        - name: statamic-database
-          mountPath: /var/www/html/database
-        - name: templates-volume
-          mountPath: /templates
-      
-      # Main container
-      containers:
-      - name: statamic
-        image: localhost:5000/statamic:latest
+          chmod -R 755 /var/www/html/resources
+          
+          # Clear caches
+          cd /var/www/html
+          php artisan cache:clear
+          php artisan config:clear
+          php artisan route:clear
+          php artisan view:clear
+          
+          # Start services with supervisord
+          exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
         ports:
         - containerPort: 80
         env:
         - name: APP_ENV
           value: "production"
         - name: APP_DEBUG
-          value: "false"
+          value: "true"
         - name: APP_URL
           value: "http://localhost"
         - name: DB_CONNECTION
           value: "sqlite"
+        - name: APP_KEY
+          value: "base64:OhnkcxLhoN5uBZ2QjikXVT3pM/YC5kpyWl65hyCeNr8="
+        - name: CACHE_DRIVER
+          value: "file"
         volumeMounts:
         - name: statamic-storage
           mountPath: /var/www/html/storage
@@ -547,11 +575,24 @@ spec:
           mountPath: /var/www/html/content
         - name: statamic-resources
           mountPath: /var/www/html/resources
-        - name: bootstrap-cache
-          mountPath: /var/www/html/bootstrap/cache
         - name: statamic-database
           mountPath: /var/www/html/database
-      
+        - name: bootstrap-cache
+          mountPath: /var/www/html/bootstrap/cache
+        readinessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+        livenessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 10
+          failureThreshold: 6
       volumes:
       - name: statamic-storage
         persistentVolumeClaim:
@@ -563,14 +604,16 @@ spec:
         persistentVolumeClaim:
           claimName: statamic-resources
       - name: bootstrap-cache
-        emptyDir: {}  # Use an emptyDir for cache - doesn't need to persist
+        emptyDir: {}
       - name: statamic-database
         persistentVolumeClaim:
-          claimName: statamic-database  # Add this PVC if not already defined
+          claimName: statamic-database
       - name: templates-volume
-        emptyDir: {}  # Use an emptyDir for simplicity
+        hostPath:
+          path: /templates
+          type: Directory
 ---
-# Statamic Service
+# Statamic Service - Exposed as LoadBalancer for external access
 apiVersion: v1
 kind: Service
 metadata:
@@ -581,10 +624,11 @@ spec:
   ports:
     - port: 80
       targetPort: 80
+      name: http
   selector:
     app: statamic
 ---
-# Ingress to expose services externally
+# Nginx Ingress Controller for internal service routing
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
