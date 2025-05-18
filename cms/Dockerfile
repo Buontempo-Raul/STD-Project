@@ -70,10 +70,17 @@ RUN echo '#!/bin/sh' > /start.sh && \
     echo '' >> /start.sh && \
     echo '# Set up Statamic environment' >> /start.sh && \
     echo 'if [ ! -f /var/www/html/.env ]; then' >> /start.sh && \
-    echo '    echo "Setting up Statamic environment..."' >> /start.sh && \
+    echo '    echo "Setting up Statamic environment for MySQL..."' >> /start.sh && \
     echo '    cp -f .env.example .env' >> /start.sh && \
+    echo '    sed -i "s/DB_CONNECTION=.*/DB_CONNECTION=mysql/" .env' >> /start.sh && \
+    echo '    sed -i "s/DB_HOST=.*/DB_HOST=mysql-service/" .env' >> /start.sh && \
+    echo '    sed -i "s/DB_PORT=.*/DB_PORT=3306/" .env' >> /start.sh && \
+    echo '    sed -i "s/DB_DATABASE=.*/DB_DATABASE=statamic/" .env' >> /start.sh && \
+    echo '    sed -i "s/DB_USERNAME=.*/DB_USERNAME=${DB_USERNAME}/" .env' >> /start.sh && \
+    echo '    sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=${DB_PASSWORD}/" .env' >> /start.sh && \
     echo '    php artisan key:generate --force' >> /start.sh && \
     echo 'fi' >> /start.sh && \
+    echo 'php artisan migrate --force' >> /start.sh && \
     echo '' >> /start.sh && \
     echo '# Initialize Statamic (only if not already done)' >> /start.sh && \
     echo 'php artisan storage:link' >> /start.sh && \
