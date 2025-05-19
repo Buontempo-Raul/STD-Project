@@ -12,7 +12,7 @@ data:
   
   # Chat Backend Configuration
   CHAT_BACKEND_PORT: "88"
-  
+
   # Frontend URLs
   CHAT_FRONTEND_PORT: "90"
   AI_FRONTEND_PORT: "91"
@@ -211,6 +211,7 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 90
+              hostPort: 90
           resources:
             requests:
               memory: "128Mi"
@@ -219,7 +220,7 @@ spec:
               memory: "256Mi"
               cpu: "200m"
 ---
-# Chat Frontend Service
+# Chat Frontend NodePort Service
 apiVersion: v1
 kind: Service
 metadata:
@@ -227,8 +228,9 @@ metadata:
   namespace: default
 spec:
   ports:
-    - port: 90
-      targetPort: 90
+    - port: 90            # External port
+      targetPort: 90      # Container port
+      protocol: TCP
   selector:
     app: chat-frontend
 
@@ -357,6 +359,7 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 91
+              hostPort: 91
           env:
             - name: REACT_APP_API_URL
               value: http://ai-backend:89
@@ -368,7 +371,7 @@ spec:
               memory: "256Mi"
               cpu: "200m"
 ---
-# AI Frontend Service
+# AI Frontend NodePort Service
 apiVersion: v1
 kind: Service
 metadata:
@@ -376,11 +379,11 @@ metadata:
   namespace: default
 spec:
   ports:
-    - port: 91
-      targetPort: 91
+    - port: 91            # External port
+      targetPort: 91      # Container port
+      protocol: TCP
   selector:
     app: ai-frontend
-
 ---
 # Statamic CMS Deployment - Simplified with 2 replicas as required
 apiVersion: apps/v1
@@ -424,13 +427,13 @@ metadata:
   name: statamic
   namespace: default
 spec:
-  type: NodePort
   ports:
-    - port: 80
-      targetPort: 80
-      nodePort: 30080  # This will expose on each node's IP at port 30080
+    - port: 80            # External port
+      targetPort: 80      # Container port
+      protocol: TCP
   selector:
     app: statamic
+
 ---
 # Nginx Ingress for internal service routing
 apiVersion: networking.k8s.io/v1
@@ -440,44 +443,47 @@ metadata:
   namespace: default
   annotations:
     kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/websocket-services: "chat-backend"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    # Change the rewrite target pattern
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
 spec:
   rules:
   - http:
       paths:
-      - path: /()(.*)
+      - path: /
         pathType: Prefix
         backend:
           service:
             name: statamic
             port:
               number: 80
-      - path: /chat(/|$)(.*)
+      - path: /chat
         pathType: Prefix
         backend:
           service:
             name: chat-frontend
             port:
               number: 90
-      - path: /ws(/|$)(.*)
+      - path: /ws
         pathType: Prefix
         backend:
           service:
             name: chat-backend
             port:
               number: 88
-      - path: /ai(/|$)(.*)
+      - path: /ai
         pathType: Prefix
         backend:
           service:
             name: ai-frontend
             port:
               number: 91
-      - path: /api(/|$)(.*)
+      - path: /api
         pathType: Prefix
         backend:
           service:

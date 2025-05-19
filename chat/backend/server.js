@@ -6,9 +6,16 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 
+const IP_ADDRESS = process.env.IP_ADDRESS || '0.0.0.0';
+
+
 // Configurare Express
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*', // In production, specify actual allowed origins
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+}));
 app.use(bodyParser.json());
 
 // Crearea serverului HTTP
@@ -17,11 +24,16 @@ const server = http.createServer(app);
 // Configurare WebSocket Server
 const wss = new WebSocket.Server({ 
   server: server,
-  // Eliminăm restricția de cale pentru a simplifica debugging-ul
+  verifyClient: (info) => {
+    console.log('Connection attempt from:', info.origin);
+    return true; // Accept all connections for now
+  }
 });
 
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@mongodb:27017/chat?authSource=admin';
+
 // Conectare la MongoDB
-mongoose.connect('mongodb://root:example@mongodb:27017/chat?authSource=admin', {
+mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 }).then(() => {
@@ -47,6 +59,10 @@ app.get('/messages', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
 });
 
 // Gestionarea conexiunilor WebSocket
@@ -159,6 +175,7 @@ app.get('/', (req, res) => {
 });
 
 // Pornire server
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Serverul rulează pe portul ${PORT}`);
+// Then update the server.listen line
+server.listen(PORT, IP_ADDRESS, () => {
+  console.log(`Serverul rulează pe ${IP_ADDRESS}:${PORT}`);
 });

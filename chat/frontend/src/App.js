@@ -15,8 +15,9 @@ function App() {
   useEffect(() => {
     if (username && !wsConnected) {
       // Folosim calea relativă prin proxy Nginx
-      const wsUrl = `ws://${window.location.hostname}:90/ws`;
-      console.log("Conectare la WebSocket:", wsUrl);
+      const wsHost = window.location.hostname;
+      const wsUrl = `ws://${wsHost}:88`;
+      console.log("Connecting to WebSocket at:", wsUrl);
       wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {
