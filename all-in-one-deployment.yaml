@@ -211,7 +211,6 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 90
-              hostPort: 90
           resources:
             requests:
               memory: "128Mi"
@@ -359,7 +358,6 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 91
-              hostPort: 91
           env:
             - name: REACT_APP_API_URL
               value: http://ai-backend:89
@@ -410,7 +408,6 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
-          hostPort: 80  # This makes the container port available directly on the host
         resources:
           requests:
             memory: "256Mi"
@@ -436,6 +433,7 @@ spec:
 
 ---
 # Nginx Ingress for internal service routing
+# Nginx Ingress for internal service routing
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -443,14 +441,9 @@ metadata:
   namespace: default
   annotations:
     kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
-    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
-    nginx.ingress.kubernetes.io/websocket-services: "chat-backend"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
 spec:
   rules:
   - http:
