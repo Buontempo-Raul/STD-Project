@@ -1,0 +1,489 @@
+---
+# ConfigMap for non-sensitive application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: default
+data:
+  # AI Backend Configuration
+  AI_BACKEND_PORT: "89"
+  AI_USE_MOCK_DATA: "false"
+  
+  # Chat Backend Configuration
+  CHAT_BACKEND_PORT: "88"
+
+  # Frontend URLs
+  CHAT_FRONTEND_PORT: "90"
+  AI_FRONTEND_PORT: "91"
+  APP_URL: "http://localhost"
+  
+  # CMS Configuration
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  DB_CONNECTION: "sqlite"
+  
+  # Storage Container Settings
+  STORAGE_CONTAINER: "face-detection"
+
+---
+# Storage configurations for persistent data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-backend-temp
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# MongoDB Deployment - Stores chat messages
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: default
+  labels:
+    app: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:4.4
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: mongodb-root-username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: mongodb-root-password
+          volumeMounts:
+            - mountPath: /data/db
+              name: mongodb-data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - db.adminCommand('ping')
+            failureThreshold: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: mongodb-data
+---
+# MongoDB Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: default
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+  selector:
+    app: mongodb
+
+---
+# Chat Backend Deployment - Node.js with WebSockets - 5 replicas as required
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-backend
+  namespace: default
+  labels:
+    app: chat-backend
+spec:
+  replicas: 5  # As specified in requirements
+  selector:
+    matchLabels:
+      app: chat-backend
+  template:
+    metadata:
+      labels:
+        app: chat-backend
+    spec:
+      containers:
+        - name: chat-backend
+          # Updated image reference for MicroK8s registry
+          image: localhost:32000/chat-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 88
+          env:
+            - name: PORT
+              value: "88"
+            - name: MONGODB_URI
+              value: "mongodb://$(MONGODB_USERNAME):$(MONGODB_PASSWORD)@mongodb:27017/chat?authSource=admin"
+            - name: MONGODB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: mongodb-root-username
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: mongodb-root-password
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+# Chat Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-backend
+  namespace: default
+spec:
+  ports:
+    - port: 88
+      targetPort: 88
+  selector:
+    app: chat-backend
+
+---
+# Chat Frontend Deployment - React - 1 replica as required
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-frontend
+  namespace: default
+  labels:
+    app: chat-frontend
+spec:
+  replicas: 1  # As specified in requirements
+  selector:
+    matchLabels:
+      app: chat-frontend
+  template:
+    metadata:
+      labels:
+        app: chat-frontend
+    spec:
+      containers:
+        - name: chat-frontend
+          # Updated image reference for MicroK8s registry
+          image: localhost:32000/chat-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 90
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+# Chat Frontend NodePort Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-frontend
+  namespace: default
+spec:
+  ports:
+    - port: 90            # External port
+      targetPort: 90      # Container port
+      protocol: TCP
+  selector:
+    app: chat-frontend
+
+---
+# AI Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-backend
+  namespace: default
+  labels:
+    app: ai-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-backend
+  template:
+    metadata:
+      labels:
+        app: ai-backend
+    spec:
+      containers:
+        - name: ai-backend
+          # Updated image reference for MicroK8s registry
+          image: localhost:32000/ai-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 89
+          env:
+            - name: PORT
+              value: "89"
+            - name: USE_MOCK_DATA
+              value: "false"
+            - name: STORAGE_CONTAINER
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: storage_container
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: storage-connection-string
+            - name: FACE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: face-api-key
+            - name: FACE_API_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: face-api-endpoint
+            - name: SQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: sql-user
+            - name: SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: sql-password
+            - name: SQL_SERVER
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: sql-server
+            - name: SQL_DB
+              valueFrom:
+                secretKeyRef:
+                  name: azure-secrets
+                  key: sql-db
+          volumeMounts:
+            - mountPath: /app/temp
+              name: ai-backend-temp
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: ai-backend-temp
+          persistentVolumeClaim:
+            claimName: ai-backend-temp
+---
+# AI Backend Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-backend
+  namespace: default
+spec:
+  ports:
+    - port: 89
+      targetPort: 89
+  selector:
+    app: ai-backend
+
+---
+# AI Frontend Deployment - React - 1 replica as required
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-frontend
+  namespace: default
+  labels:
+    app: ai-frontend
+spec:
+  replicas: 1  # As specified in requirements
+  selector:
+    matchLabels:
+      app: ai-frontend
+  template:
+    metadata:
+      labels:
+        app: ai-frontend
+    spec:
+      containers:
+        - name: ai-frontend
+          # Updated image reference for MicroK8s registry
+          image: localhost:32000/ai-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 91
+          env:
+            - name: REACT_APP_API_URL
+              value: http://ai-backend:89
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+# AI Frontend NodePort Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-frontend
+  namespace: default
+spec:
+  ports:
+    - port: 91            # External port
+      targetPort: 91      # Container port
+      protocol: TCP
+  selector:
+    app: ai-frontend
+---
+# Statamic CMS Deployment - Simplified with 2 replicas as required
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statamic
+  namespace: default
+  labels:
+    app: statamic
+spec:
+  replicas: 2  # As specified in requirements
+  selector:
+    matchLabels:
+      app: statamic
+  template:
+    metadata:
+      labels:
+        app: statamic
+    spec:
+      containers:
+      - name: statamic
+        # Updated image reference for MicroK8s registry
+        image: localhost:32000/statamic:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+# Statamic CMS Service as NodePort to expose on VM IP:80
+apiVersion: v1
+kind: Service
+metadata:
+  name: statamic
+  namespace: default
+spec:
+  ports:
+    - port: 80            # External port
+      targetPort: 80      # Container port
+      protocol: TCP
+  selector:
+    app: statamic
+
+---
+# Nginx Ingress for internal service routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Enable use of regex in paths
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Default backend in case of errors (optional)
+    nginx.ingress.kubernetes.io/default-backend: "statamic"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: statamic
+            port:
+              number: 80
+      - path: /chat(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: chat-frontend
+            port:
+              number: 90
+      - path: /ws(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: chat-backend
+            port:
+              number: 88
+      - path: /ai(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ai-frontend
+            port:
+              number: 91
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: ai-backend
+            port:
+              number: 89
