@@ -433,7 +433,6 @@ spec:
 
 ---
 # Nginx Ingress for internal service routing
-# Nginx Ingress for internal service routing
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -444,6 +443,10 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # Enable use of regex in paths
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Default backend in case of errors (optional)
+    nginx.ingress.kubernetes.io/default-backend: "statamic"
 spec:
   rules:
   - http:
@@ -455,29 +458,29 @@ spec:
             name: statamic
             port:
               number: 80
-      - path: /chat
-        pathType: Prefix
+      - path: /chat(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: chat-frontend
             port:
               number: 90
-      - path: /ws
-        pathType: Prefix
+      - path: /ws(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: chat-backend
             port:
               number: 88
-      - path: /ai
-        pathType: Prefix
+      - path: /ai(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: ai-frontend
             port:
               number: 91
-      - path: /api
-        pathType: Prefix
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: ai-backend
