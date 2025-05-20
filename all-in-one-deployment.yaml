@@ -26,7 +26,7 @@ data:
   # Storage Container Settings
   STORAGE_CONTAINER: "face-detection"
 
-  CHAT_WS_URL: "ws://4.247.145.198/ws"  # Adjust for production
+  CHAT_WS_URL: ""  # Adjust for production
 
 ---
 # Storage configurations for persistent data
@@ -558,4 +558,19 @@ spec:
       protocol: TCP
   selector:
     app: statamic
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-ws-lb
+  namespace: default
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 88
+      targetPort: 88
+      protocol: TCP
+  selector:
+    app: chat-backend
+  sessionAffinity: ClientIP  # Important for WebSocket connections
 ---
