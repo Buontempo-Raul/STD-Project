@@ -24,9 +24,15 @@ const server = http.createServer(app);
 // Configurare WebSocket Server
 const wss = new WebSocket.Server({ 
   server: server,
+  // Remove path restrictions completely
+  path: undefined,
   verifyClient: (info) => {
-    console.log('Connection attempt from:', info.origin);
-    return true; // Accept all connections for now
+    // Log connection attempts for debugging
+    console.log('Connection attempt from:', info.req.socket.remoteAddress);
+    console.log('Connection path:', info.req.url);
+    console.log('Connection headers:', JSON.stringify(info.req.headers, null, 2));
+    // Accept all connections, regardless of path
+    return true;
   }
 });
 
@@ -68,6 +74,8 @@ app.get('/health', (req, res) => {
 // Gestionarea conexiunilor WebSocket
 wss.on('connection', (ws, req) => {
   console.log('Client conectat de la:', req.socket.remoteAddress);
+  console.log('Path:', req.url);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   console.log('Total clienți conectați:', wss.clients.size);
   
   // Trimiterea mesajelor existente către client la conectare

@@ -331,7 +331,7 @@
     <div class="debug-panel" id="debug-panel">
         <h3>Debugging</h3>
         <div class="debug-url">
-            <input type="text" id="ws-url" value="ws://4.213.180.54:88" />
+            <input type="text" id="ws-url" value="ws://4.213.180.54/ws" />
             <button id="change-url">Schimbă URL</button>
         </div>
         <div class="log" id="log"></div>
@@ -409,7 +409,7 @@
         
         // Conexiune WebSocket
         function connectToWebSocket() {
-            const wsUrl = wsUrlInput.value.trim();
+            let wsUrl = wsUrlInput.value.trim();
             log(`Încercare conectare la ${wsUrl}`);
             
             try {

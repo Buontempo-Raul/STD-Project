@@ -14,9 +14,9 @@ function App() {
   // Conectare la WebSocket server
   useEffect(() => {
     if (username && !wsConnected) {
-      // Folosim calea relativă prin proxy Nginx
-      const wsHost = window.location.hostname;
-      const wsUrl = `ws://${wsHost}:88`;
+      // Folosim calea relativă prin proxy Nginx      
+      let wsUrl = 'ws://4.213.180.54/ws';
+
       console.log("Connecting to WebSocket at:", wsUrl);
       wsRef.current = new WebSocket(wsUrl);
 
