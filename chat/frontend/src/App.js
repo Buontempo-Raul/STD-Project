@@ -15,7 +15,8 @@ function App() {
   useEffect(() => {
     if (username && !wsConnected) {
       // Folosim calea relativă prin proxy Nginx      
-      let wsUrl = 'ws://4.213.180.54/ws';
+      // In App.js, replace the hardcoded wsUrl
+      let wsUrl = process.env.REACT_APP_CHAT_WS_URL || `ws://${window.location.hostname}/ws`;
 
       console.log("Connecting to WebSocket at:", wsUrl);
       wsRef.current = new WebSocket(wsUrl);

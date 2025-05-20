@@ -186,7 +186,7 @@ spec:
     app: chat-backend
 
 ---
-# Chat Frontend Deployment - React - 1 replica as required
+# Chat Frontend Deployment with hostNetwork for direct port 90 access
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -195,7 +195,7 @@ metadata:
   labels:
     app: chat-frontend
 spec:
-  replicas: 1  # As specified in requirements
+  replicas: 1  # Must be 1 to avoid port conflicts when using hostNetwork
   selector:
     matchLabels:
       app: chat-frontend
@@ -204,9 +204,9 @@ spec:
       labels:
         app: chat-frontend
     spec:
+      hostNetwork: true  # This is the key - use the host's network namespace
       containers:
         - name: chat-frontend
-          # Updated image reference for MicroK8s registry
           image: localhost:32000/chat-frontend:latest
           imagePullPolicy: Always
           ports:
@@ -218,6 +218,16 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "200m"
+      # Optional: Add node affinity to ensure it runs on a specific node
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - node1  # Replace with your actual node name
 ---
 # Chat Frontend NodePort Service
 apiVersion: v1
@@ -333,7 +343,7 @@ spec:
     app: ai-backend
 
 ---
-# AI Frontend Deployment - React - 1 replica as required
+# AI Frontend Deployment with hostNetwork for direct port 91 access
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -342,7 +352,7 @@ metadata:
   labels:
     app: ai-frontend
 spec:
-  replicas: 1  # As specified in requirements
+  replicas: 1
   selector:
     matchLabels:
       app: ai-frontend
@@ -351,9 +361,9 @@ spec:
       labels:
         app: ai-frontend
     spec:
+      hostNetwork: true
       containers:
         - name: ai-frontend
-          # Updated image reference for MicroK8s registry
           image: localhost:32000/ai-frontend:latest
           imagePullPolicy: Always
           ports:
@@ -368,6 +378,16 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "200m"
+      # Optional: Add node affinity to ensure it runs on a specific node (same as chat)
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - node1  # Replace with your actual node name
 ---
 # AI Frontend NodePort Service
 apiVersion: v1
@@ -408,6 +428,7 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
+          hostPort: 80  # This makes the container port available directly on the host
         resources:
           requests:
             memory: "256Mi"
@@ -433,6 +454,7 @@ spec:
 
 ---
 # Nginx Ingress for internal service routing
+# Nginx Ingress for internal service routing
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -443,11 +465,10 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    # Enable use of regex in paths
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    # Default backend in case of errors (optional)
-    nginx.ingress.kubernetes.io/default-backend: "statamic"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
 spec:
   rules:
   - http:
@@ -459,31 +480,74 @@ spec:
             name: statamic
             port:
               number: 80
-      - path: /chat(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /chat
+        pathType: Prefix
         backend:
           service:
             name: chat-frontend
             port:
               number: 90
-      - path: /ws(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /ws
+        pathType: Prefix
         backend:
           service:
             name: chat-backend
             port:
               number: 88
-      - path: /ai(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /ai
+        pathType: Prefix
         backend:
           service:
             name: ai-frontend
             port:
               number: 91
-      - path: /api(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /api
+        pathType: Prefix
         backend:
           service:
             name: ai-backend
             port:
               number: 89
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-frontend-lb
+  namespace: default
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 90
+      targetPort: 90
+      protocol: TCP
+  selector:
+    app: chat-frontend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-frontend-lb
+  namespace: default
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 91
+      targetPort: 91
+      protocol: TCP
+  selector:
+    app: ai-frontend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: statamic-lb
+  namespace: default
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+  selector:
+    app: statamic
+---
