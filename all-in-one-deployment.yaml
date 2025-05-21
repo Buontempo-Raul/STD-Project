@@ -153,7 +153,10 @@ spec:
             - name: PORT
               value: "88"
             - name: MONGODB_URI
-              value: "mongodb://$(MONGODB_USERNAME):$(MONGODB_PASSWORD)@mongodb:27017/chat?authSource=admin"
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: mongodb-uri
             - name: MONGODB_USERNAME
               valueFrom:
                 secretKeyRef:
