@@ -409,9 +409,8 @@
         
         // Conexiune WebSocket
         function connectToWebSocket() {
-            let wsUrl = wsUrlInput.value.trim();
-            log(`Încercare conectare la ${wsUrl}`);
-            
+            const wsUrl = `ws://${window.location.host}/ws`; 
+                    
             try {
                 ws = new WebSocket(wsUrl);
                 

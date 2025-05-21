@@ -79,7 +79,7 @@ wss.on('connection', (ws, req) => {
   console.log('Total clienți conectați:', wss.clients.size);
   
   // Trimiterea mesajelor existente către client la conectare
-  Message.find().sort({ timestamp: 1 })
+  Message.find().sort({ timestamp: 1 }) 
     .then(messages => {
       console.log('Trimit istoric cu', messages.length, 'mesaje');
       
