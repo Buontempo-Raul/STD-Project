@@ -5,9 +5,9 @@ const WebSocket = require('ws');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const Redis = require('redis');
 
 const IP_ADDRESS = process.env.IP_ADDRESS || '0.0.0.0';
-
 
 // Configurare Express
 const app = express();
@@ -37,6 +37,54 @@ const wss = new WebSocket.Server({
 });
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://root:example@mongodb:27017/chat?authSource=admin';
+const REDIS_URL = process.env.REDIS_URL || 'redis://redis:6379';
+
+// Create Redis publisher and subscriber clients
+const redisPublisher = Redis.createClient({
+  url: REDIS_URL
+});
+const redisSubscriber = Redis.createClient({
+  url: REDIS_URL
+});
+
+// Connect to Redis
+async function connectRedis() {
+  try {
+    await redisPublisher.connect();
+    await redisSubscriber.connect();
+    console.log('Connected to Redis');
+    
+    // Subscribe to the message channel
+    await redisSubscriber.subscribe('chat-messages', (message) => {
+      try {
+        const data = JSON.parse(message);
+        console.log('Received message from Redis:', data);
+        
+        // Broadcast to all clients connected to THIS pod
+        wss.clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+              type: 'message',
+              data: data
+            }));
+          }
+        });
+      } catch (err) {
+        console.error('Error handling Redis message:', err);
+      }
+    });
+  } catch (err) {
+    console.error('Error connecting to Redis:', err);
+    // Don't fail completely, try to continue without Redis
+    console.log('Continuing without Redis synchronization');
+  }
+}
+
+// Call Redis connection
+connectRedis();
+
+// Fix for Mongoose deprecation warning
+mongoose.set('strictQuery', false);
 
 // Conectare la MongoDB
 mongoose.connect(MONGODB_URI, {
@@ -79,7 +127,7 @@ wss.on('connection', (ws, req) => {
   console.log('Total clienți conectați:', wss.clients.size);
   
   // Trimiterea mesajelor existente către client la conectare
-  Message.find().sort({ timestamp: 1 }) 
+  Message.find().sort({ timestamp: 1 })
     .then(messages => {
       console.log('Trimit istoric cu', messages.length, 'mesaje');
       
@@ -129,32 +177,55 @@ wss.on('connection', (ws, req) => {
       await newMessage.save();
       console.log('Mesaj salvat cu ID:', newMessage._id);
       
-      // Transmiterea mesajului către toți clienții conectați
-      const broadcastMessage = {
-        type: 'message',
-        data: {
-          _id: newMessage._id,
-          username: newMessage.username,
-          message: newMessage.message,
-          timestamp: newMessage.timestamp
-        }
+      // Create message data for broadcast
+      const messageData = {
+        _id: newMessage._id.toString(),
+        username: newMessage.username,
+        message: newMessage.message,
+        timestamp: newMessage.timestamp
       };
       
-      console.log('Trimit broadcast către', wss.clients.size, 'clienți');
-      let clientCount = 0;
-      
-      wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          try {
-            client.send(JSON.stringify(broadcastMessage));
-            clientCount++;
-          } catch (err) {
-            console.error('Eroare la trimiterea către client:', err);
-          }
+      // Publish to Redis for all pods to broadcast (including this one)
+      try {
+        if (redisPublisher.isReady) {
+          console.log('Publishing message to Redis');
+          await redisPublisher.publish('chat-messages', JSON.stringify(messageData));
+        } else {
+          console.log('Redis not connected, falling back to local broadcast');
+          // Only do local broadcast if Redis is not available
+          const fallbackMessage = {
+            type: 'message',
+            data: messageData
+          };
+          
+          wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+              try {
+                client.send(JSON.stringify(fallbackMessage));
+              } catch (err) {
+                console.error('Eroare la trimiterea către client:', err);
+              }
+            }
+          });
         }
-      });
-      
-      console.log('Mesaj trimis către', clientCount, 'clienți');
+      } catch (redisErr) {
+        console.error('Error publishing to Redis:', redisErr);
+        // Fall back to local broadcast if Redis fails
+        const fallbackMessage = {
+          type: 'message',
+          data: messageData
+        };
+        
+        wss.clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            try {
+              client.send(JSON.stringify(fallbackMessage));
+            } catch (err) {
+              console.error('Eroare la trimiterea către client:', err);
+            }
+          }
+        });
+      }
       
     } catch (err) {
       console.error('Eroare la procesarea mesajului:', err);
@@ -168,10 +239,6 @@ wss.on('connection', (ws, req) => {
   ws.on('error', (error) => {
     console.error('Eroare cu clientul WebSocket:', error);
   });
-
-  ws.on('close', () => {
-    console.log('Client deconectat');
-  });
 });
 
 // Portul pe care va rula serverul
@@ -183,7 +250,6 @@ app.get('/', (req, res) => {
 });
 
 // Pornire server
-// Then update the server.listen line
 server.listen(PORT, IP_ADDRESS, () => {
   console.log(`Serverul rulează pe ${IP_ADDRESS}:${PORT}`);
 });

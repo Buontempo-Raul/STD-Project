@@ -12,7 +12,8 @@
       "ws": "^7.5.3",
       "mongoose": "^6.0.8",
       "cors": "^2.8.5",
-      "body-parser": "^1.19.0"
+      "body-parser": "^1.19.0",
+      "redis": "^4.0.0"  
     },
     "devDependencies": {
       "nodemon": "^2.0.13"
