@@ -2,3 +2,4 @@
 ai/.env
 myproject
 cms/myproject
+secrets.yaml
