@@ -12,9 +12,9 @@ const fs = require('fs');
 // Configurare Express
 const app = express();
 
-// Enhanced CORS configuration
+// Enhanced CORS configuration - Allow all origins and methods for testing
 app.use(cors({
-  origin: '*', // Allow all origins for testing
+  origin: '*',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -64,6 +64,9 @@ const blobServiceClient = BlobServiceClient.fromConnectionString(storageConnecti
 const faceApiKey = process.env.FACE_API_KEY || "YourFaceApiKeyHere";
 const faceApiEndpoint = process.env.FACE_API_ENDPOINT || "https://std-face-detection.cognitiveservices.azure.com/";
 
+// Enable mock mode for easier testing
+const useMockData = (process.env.USE_MOCK_DATA || 'false') === 'true';
+
 // Debug info endpoint
 app.get('/debug', (req, res) => {
   res.json({
@@ -71,6 +74,7 @@ app.get('/debug', (req, res) => {
       storageConnection: storageConnectionString ? 'Configured (hidden)' : 'Not configured',
       faceApiKey: faceApiKey ? 'Configured (hidden)' : 'Not configured',
       faceApiEndpoint: faceApiEndpoint,
+      useMockData: useMockData,
       sqlConfig: {
         user: sqlConfig.user,
         server: sqlConfig.server,
@@ -99,6 +103,53 @@ app.post('/api/detect', upload.single('image'), async (req, res) => {
   console.log('File uploaded:', req.file.originalname, req.file.size, 'bytes');
   
   try {
+    // If using mock mode, bypass the actual processing
+    if (useMockData) {
+      console.log('MOCK MODE: Using mock data instead of actual processing');
+      
+      // Create a fake delay to simulate processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Generate mock data
+      const mockResult = {
+        success: true,
+        faces: [{
+          faceId: "mock-face-id-" + Date.now(),
+          faceRectangle: {
+            top: 50,
+            left: 50,
+            width: 200,
+            height: 200
+          },
+          faceAttributes: {
+            age: 30,
+            gender: "female",
+            emotion: {
+              neutral: 0.8,
+              happiness: 0.2
+            }
+          }
+        }],
+        resultImageUrl: "mock-image-url"
+      };
+      
+      // Save mock metadata
+      await saveMetadataToSql({
+        fileName: req.file.originalname,
+        blobUrl: "mock-blob-url",
+        blobName: "mock-blob-name",
+        timestamp: new Date().toISOString(),
+        facesDetected: 1,
+        detectionResult: JSON.stringify(mockResult)
+      });
+      
+      // Cleanup temp file
+      fs.unlinkSync(req.file.path);
+      console.log('Temporary file cleaned up');
+      
+      return res.json(mockResult);
+    }
+    
     // 1. Încărcarea imaginii în Azure Blob Storage
     console.log('Uploading to Azure Blob Storage...');
     const containerClient = blobServiceClient.getContainerClient(containerName);
@@ -186,86 +237,99 @@ app.get('/api/detections', async (req, res) => {
 
 // Funcție pentru detectarea fețelor folosind Azure Face API
 async function detectFacesWithAzure(imagePath) {
-    try {
-      console.log('Reading image file for Face API...');
-      // Citirea fișierului de imagine
-      const imageBuffer = fs.readFileSync(imagePath);
-      
-      console.log('Sending request to Face API:', `${faceApiEndpoint}/face/v1.0/detect`);
-      // Configurare cerere către Azure Face API
-      const response = await axios({
-        method: 'post',
-        url: `${faceApiEndpoint}/face/v1.0/detect`,
-        params: {
-          // Minimal parameters
-          returnFaceId: false,
-          returnFaceLandmarks: false,
-          detectionModel: 'detection_01'
-        },
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Ocp-Apim-Subscription-Key': faceApiKey
-        },
-        data: imageBuffer
-      });
-      
-      console.log('Face API response status:', response.status);
-      
-      // Process the response to add placeholder data for the deprecated attributes
-      const faces = response.data.map(face => {
-        return {
-          ...face,
-          // Add placeholder data for frontend compatibility
+  try {
+    console.log('Reading image file for Face API...');
+    // Citirea fișierului de imagine
+    const imageBuffer = fs.readFileSync(imagePath);
+    
+    console.log('Sending request to Face API:', `${faceApiEndpoint}/face/v1.0/detect`);
+    // Configurare cerere către Azure Face API
+    const response = await axios({
+      method: 'post',
+      url: `${faceApiEndpoint}/face/v1.0/detect`,
+      params: {
+        // Minimal parameters
+        returnFaceId: false,
+        returnFaceLandmarks: false,
+        detectionModel: 'detection_01'
+      },
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Ocp-Apim-Subscription-Key': faceApiKey
+      },
+      data: imageBuffer
+    });
+    
+    console.log('Face API response status:', response.status);
+    
+    // Process the response to add placeholder data for the deprecated attributes
+    const faces = response.data.map(face => {
+      return {
+        ...face,
+        // Add placeholder data for frontend compatibility
+        faceAttributes: {
+          age: "N/A (deprecated)",
+          gender: "N/A (deprecated)",
+          emotion: {
+            neutral: 1.0
+          }
+        }
+      };
+    });
+    
+    return {
+      faces: faces
+    };
+  } catch (error) {
+    console.error('Error calling Azure Face API:', 
+      error.response ? `Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data)}` : error.message);
+    
+    // If using the mock data mode, return sample face data
+    if (useMockData) {
+      console.log('Using mock face detection data instead');
+      return {
+        faces: [{
+          faceId: "mock-face-id-" + Date.now(),
+          faceRectangle: {
+            top: 50,
+            left: 50,
+            width: 200,
+            height: 200
+          },
           faceAttributes: {
-            age: "N/A (deprecated)",
-            gender: "N/A (deprecated)",
+            age: 30,
+            gender: "male",
             emotion: {
-              neutral: 1.0
+              neutral: 0.8,
+              happiness: 0.1,
+              surprise: 0.1
             }
           }
-        };
-      });
-      
-      return {
-        faces: faces
+        }]
       };
-    } catch (error) {
-      console.error('Error calling Azure Face API:', 
-        error.response ? `Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data)}` : error.message);
-      
-      // If using the mock data mode, return sample face data
-      if (process.env.USE_MOCK_DATA === 'true') {
-        console.log('Using mock face detection data instead');
-        return {
-          faces: [{
-            faceId: "mock-face-id-" + Date.now(),
-            faceRectangle: {
-              top: 50,
-              left: 50,
-              width: 200,
-              height: 200
-            },
-            faceAttributes: {
-              age: 30,
-              gender: "male",
-              emotion: {
-                neutral: 0.8,
-                happiness: 0.1,
-                surprise: 0.1
-              }
-            }
-          }]
-        };
-      }
-      
-      throw new Error('Face detection API failed: ' + 
-        (error.response ? JSON.stringify(error.response.data) : error.message));
     }
+    
+    throw new Error('Face detection API failed: ' + 
+      (error.response ? JSON.stringify(error.response.data) : error.message));
   }
+}
 
 // Funcție pentru salvarea metadatelor în Azure SQL
 async function saveMetadataToSql(metadata) {
   try {
+    // Check if using mock mode
+    if (useMockData) {
+      console.log('MOCK MODE: Simulating SQL database save');
+      if (!global.mockDetections) {
+        global.mockDetections = [];
+      }
+      
+      metadata.id = global.mockDetections.length + 1;
+      global.mockDetections.push(metadata);
+      console.log('Saved mock data, total records:', global.mockDetections.length);
+      return;
+    }
+    
     console.log('Connecting to SQL database...');
     const pool = await sql.connect(sqlConfig);
     console.log('Connected to SQL database');
@@ -287,21 +351,6 @@ async function saveMetadataToSql(metadata) {
       END
     `);
     console.log('Table FaceDetections exists or was created');
-    
-    // Mock data for testing without Azure SQL
-    const useMockData = 'false';
-    
-    if (useMockData == 'true') {
-      console.log('Using mock data storage instead of SQL (for testing)');
-      if (!global.mockDetections) {
-        global.mockDetections = [];
-      }
-      
-      metadata.id = global.mockDetections.length + 1;
-      global.mockDetections.push(metadata);
-      console.log('Saved mock data, total records:', global.mockDetections.length);
-      return;
-    }
     
     // Inserare metadate
     console.log('Inserting metadata into SQL...');
@@ -326,11 +375,9 @@ async function saveMetadataToSql(metadata) {
 // Funcție pentru preluarea istoricului detecțiilor din Azure SQL
 async function getDetectionsFromSql() {
   try {
-    // Mock data for testing without Azure SQL
-    const useMockData = 'false';
-    
-    if (useMockData == 'true') {
-      console.log('Using mock data instead of SQL (for testing)');
+    // Check if using mock mode
+    if (useMockData) {
+      console.log('MOCK MODE: Returning mock detection history');
       if (!global.mockDetections) {
         global.mockDetections = [];
         
@@ -384,6 +431,17 @@ async function getDetectionsFromSql() {
     return result.recordset;
   } catch (error) {
     console.error('Error fetching detections from SQL:', error);
+    if (useMockData) {
+      return [
+        {
+          id: 1,
+          fileName: 'error-recovery-mock.jpg',
+          blobUrl: 'https://example.com/mock.jpg',
+          timestamp: new Date(),
+          facesDetected: 1
+        }
+      ];
+    }
     throw error;
   }
 }
@@ -393,10 +451,11 @@ app.get('/', (req, res) => {
   res.send('Face Detection API is running!');
 });
 
-// Portul pe care va rula serverul
+// Configurable port with fallback
 const PORT = process.env.PORT || 89;
+const IP_ADDRESS = '0.0.0.0';
 
 // Pornire server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Face Detection server running on port ${PORT}`);
+app.listen(PORT, IP_ADDRESS, () => {
+  console.log(`Face Detection server running on ${IP_ADDRESS}:${PORT}`);
 });

@@ -275,6 +275,7 @@ spec:
     app: chat-frontend
 ---
 # AI Backend Deployment
+# AI Backend Deployment (Updated)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -302,12 +303,12 @@ spec:
             - name: PORT
               value: "89"
             - name: USE_MOCK_DATA
-              value: "false"
+              value: "true"  # Set to true for testing without Azure dependencies
             - name: STORAGE_CONTAINER
               valueFrom:
-                secretKeyRef:
-                  name: azure-secrets
-                  key: storage_container
+                configMapKeyRef:
+                  name: app-config
+                  key: STORAGE_CONTAINER
             - name: AZURE_STORAGE_CONNECTION_STRING
               valueFrom:
                 secretKeyRef:
@@ -353,6 +354,19 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+          # Add health check like the chat component has
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 89
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 89
+            initialDelaySeconds: 15
+            periodSeconds: 20
       volumes:
         - name: ai-backend-temp
           persistentVolumeClaim:
@@ -411,9 +425,7 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 91
-          env:
-            - name: REACT_APP_API_URL
-              value: http://ai-backend:89
+          # Remove REACT_APP_API_URL since we're using relative URLs now
           resources:
             requests:
               memory: "128Mi"

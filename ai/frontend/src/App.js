@@ -11,8 +11,8 @@ function App() {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const imageRef = useRef(null);
 
-  // Base URL for API - use environment variable if available or default
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:89';
+  // Use relative URLs instead of absolute URLs
+  // This will allow requests to be properly routed through Nginx
 
   // Fetch detection history on component mount
   useEffect(() => {
@@ -22,8 +22,8 @@ function App() {
   // Fetch detection history from backend
   const fetchHistory = async () => {
     try {
-      console.log('Fetching history from:', `${API_BASE_URL}/api/detections`);
-      const response = await fetch(`${API_BASE_URL}/api/detections`);
+      console.log('Fetching history from:', '/api/detections');
+      const response = await fetch('/api/detections');
       
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
@@ -75,9 +75,9 @@ function App() {
       const formData = new FormData();
       formData.append('image', file);
       
-      // Send to backend service
-      console.log('Sending to:', `${API_BASE_URL}/api/detect`);
-      const response = await fetch(`${API_BASE_URL}/api/detect`, {
+      // Use relative URL path for API calls
+      console.log('Sending to:', '/api/detect');
+      const response = await fetch('/api/detect', {
         method: 'POST',
         body: formData,
       });
@@ -150,48 +150,48 @@ function App() {
   const renderDetectionResult = () => {
     if (!detectionResult) return null;
   
-  return (
-    <div className="detection-result">
-      <h3>Detection Results</h3>
-      <div className="result-image-container">
-        <img 
-          ref={imageRef}
-          src={preview} 
-          alt="Detection result" 
-          className="result-image" 
-          onLoad={handleImageLoad}
-        />
-        {detectionResult.faces && imageSize.displayWidth > 0 && detectionResult.faces.map((face, index) => {
-          // Extract face rectangle from the result
-          const rect = face.faceRectangle || { left: 0, top: 0, width: 0, height: 0 };
-          
-          // Calculate the scaled rectangle
-          const scaledRect = getScaledRect(rect);
-          
-          // If scaling failed, don't render this rectangle
-          if (!scaledRect) return null;
-          
-          console.log(`Face #${index + 1}:`);
-          console.log(`  Original: left=${rect.left}, top=${rect.top}, width=${rect.width}, height=${rect.height}`);
-          console.log(`  Scaled: left=${scaledRect.left}, top=${scaledRect.top}, width=${scaledRect.width}, height=${scaledRect.height}`);
-          
-          return (
-            <div 
-              key={index}
-              className="face-rectangle"
-              style={{
-                left: `${scaledRect.left}px`,
-                top: `${scaledRect.top}px`,
-                width: `${scaledRect.width}px`,
-                height: `${scaledRect.height}px`,
-                border: '3px solid red',
-                position: 'absolute',
-                boxSizing: 'border-box'
-              }}
-            />
-          );
-        })}
-      </div>
+    return (
+      <div className="detection-result">
+        <h3>Detection Results</h3>
+        <div className="result-image-container">
+          <img 
+            ref={imageRef}
+            src={preview} 
+            alt="Detection result" 
+            className="result-image" 
+            onLoad={handleImageLoad}
+          />
+          {detectionResult.faces && imageSize.displayWidth > 0 && detectionResult.faces.map((face, index) => {
+            // Extract face rectangle from the result
+            const rect = face.faceRectangle || { left: 0, top: 0, width: 0, height: 0 };
+            
+            // Calculate the scaled rectangle
+            const scaledRect = getScaledRect(rect);
+            
+            // If scaling failed, don't render this rectangle
+            if (!scaledRect) return null;
+            
+            console.log(`Face #${index + 1}:`);
+            console.log(`  Original: left=${rect.left}, top=${rect.top}, width=${rect.width}, height=${rect.height}`);
+            console.log(`  Scaled: left=${scaledRect.left}, top=${scaledRect.top}, width=${scaledRect.width}, height=${scaledRect.height}`);
+            
+            return (
+              <div 
+                key={index}
+                className="face-rectangle"
+                style={{
+                  left: `${scaledRect.left}px`,
+                  top: `${scaledRect.top}px`,
+                  width: `${scaledRect.width}px`,
+                  height: `${scaledRect.height}px`,
+                  border: '3px solid red',
+                  position: 'absolute',
+                  boxSizing: 'border-box'
+                }}
+              />
+            );
+          })}
+        </div>
         <div className="detection-details">
           <p><strong>Detected faces:</strong> {detectionResult.faces ? detectionResult.faces.length : 0}</p>
           {detectionResult.faces && detectionResult.faces.map((face, index) => (
