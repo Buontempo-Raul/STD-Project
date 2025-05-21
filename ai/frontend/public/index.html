@@ -12,13 +12,67 @@
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+      user's mobile device or desktop.
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Detectare Fețe cu AI</title>
+    <style>
+      /* Add some basic styling to show app is loading */
+      .app-loading {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+          Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        text-align: center;
+        padding: 20px;
+      }
+      .app-loading h2 {
+        margin-bottom: 20px;
+        color: #db2777;
+      }
+      .spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border-left-color: #db2777;
+        animation: spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
   </head>
   <body>
     <noscript>Trebuie să activați JavaScript pentru a rula această aplicație.</noscript>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Loading indicator that will be replaced when React loads successfully -->
+      <div class="app-loading">
+        <div class="spinner"></div>
+        <h2>Încărcare aplicație de detectare a fețelor...</h2>
+        <p>Dacă această pagină persistă, vă rugăm verificați consola pentru erori.</p>
+      </div>
+    </div>
+    <script>
+      // Error handling to help debug issues
+      window.addEventListener('error', function(event) {
+        console.error('Global error caught:', event.error);
+        const rootEl = document.getElementById('root');
+        if (rootEl && rootEl.innerHTML.includes('Încărcare aplicație')) {
+          rootEl.innerHTML = `
+            <div style="font-family: sans-serif; padding: 20px; text-align: center;">
+              <h2 style="color: #cc0000;">Eroare la încărcarea aplicației</h2>
+              <p>Detalii: ${event.message}</p>
+              <p>Verificați consola pentru mai multe informații.</p>
+            </div>
+          `;
+        }
+      });
+    </script>
   </body>
 </html>

@@ -11,11 +11,11 @@ function App() {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const imageRef = useRef(null);
 
-  // Use relative URLs instead of absolute URLs
-  // This will allow requests to be properly routed through Nginx
+  console.log("App component rendering"); // Debug log
 
   // Fetch detection history on component mount
   useEffect(() => {
+    console.log("Fetching history...");
     fetchHistory();
   }, []);
 
@@ -23,7 +23,14 @@ function App() {
   const fetchHistory = async () => {
     try {
       console.log('Fetching history from:', '/api/detections');
-      const response = await fetch('/api/detections');
+      const response = await fetch('/api/detections', {
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      console.log('History response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
@@ -31,10 +38,12 @@ function App() {
       
       const data = await response.json();
       console.log('History data received:', data);
-      setHistory(data);
+      setHistory(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching history:', err);
       setError(`Failed to load detection history: ${err.message}`);
+      // Set empty array to avoid undefined errors
+      setHistory([]);
     }
   };
 
@@ -75,12 +84,13 @@ function App() {
       const formData = new FormData();
       formData.append('image', file);
       
-      // Use relative URL path for API calls
       console.log('Sending to:', '/api/detect');
       const response = await fetch('/api/detect', {
         method: 'POST',
         body: formData,
       });
+      
+      console.log('Upload response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -255,8 +265,8 @@ function App() {
           <p>No previous detections found.</p>
         ) : (
           <div className="history-list">
-            {history.map((item) => (
-              <div key={item.id || item.fileName} className="history-item">
+            {history.map((item, idx) => (
+              <div key={item.id || item.fileName || idx} className="history-item">
                 <div className="history-item-header">
                   <span className="history-item-name">{item.fileName}</span>
                   <span className="history-item-time">{formatTimestamp(item.timestamp)}</span>

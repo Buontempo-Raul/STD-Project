@@ -303,7 +303,7 @@ spec:
             - name: PORT
               value: "89"
             - name: USE_MOCK_DATA
-              value: "true"  # Set to true for testing without Azure dependencies
+              value: "false"  # Set to true for testing without Azure dependencies
             - name: STORAGE_CONTAINER
               valueFrom:
                 configMapKeyRef:
