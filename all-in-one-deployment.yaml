@@ -191,21 +191,21 @@ spec:
     app: chat-backend
 ---
 # Chat Backend NodePort Service (External access)
-apiVersion: v1
-kind: Service
-metadata:
-  name: chat-backend-np
-  namespace: default
-spec:
-  type: NodePort
-  ports:
-    - port: 88
-      targetPort: 88
-      nodePort: 30088
-      protocol: TCP
-  selector:
-    app: chat-backend
-  sessionAffinity: ClientIP
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: chat-backend-np
+#   namespace: default
+# spec:
+#   type: NodePort
+#   ports:
+#     - port: 88
+#       targetPort: 88
+#       nodePort: 30088
+#       protocol: TCP
+#   selector:
+#     app: chat-backend
+#   sessionAffinity: ClientIP
 ---
 # Chat Frontend Deployment
 apiVersion: apps/v1
@@ -386,20 +386,20 @@ spec:
     app: ai-backend
 ---
 # AI Backend NodePort Service (External access)
-apiVersion: v1
-kind: Service
-metadata:
-  name: ai-backend-np
-  namespace: default
-spec:
-  type: NodePort
-  ports:
-    - port: 89
-      targetPort: 89
-      nodePort: 30089
-      protocol: TCP
-  selector:
-    app: ai-backend
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: ai-backend-np
+#   namespace: default
+# spec:
+#   type: NodePort
+#   ports:
+#     - port: 89
+#       targetPort: 89
+#       nodePort: 30089
+#       protocol: TCP
+#   selector:
+#     app: ai-backend
 ---
 # AI Frontend Deployment
 apiVersion: apps/v1
